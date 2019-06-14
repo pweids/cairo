@@ -105,15 +105,26 @@ def test_mv_file(cleandir):
   ft = find_file(root, 'test.txt')
   assert resolve(ft)['filepath'] == newfp
 
-
 def test_changed(cleandir):
   root = init()
   cf = changed_files(root)
   assert len(cf) == 0
 
-  time.sleep(.04)
-  with open(Path()/'test_dir'/'test.txt', 'w') as f:
+  p = Path()/'test_dir'/'test.txt'
+  time.sleep(.03)
+  with open(p, 'w') as f:
     f.write('change')
   
   cf = changed_files(root)
   assert len(cf) == 1
+
+
+def test_new_file(cleandir):
+  assert not list(Path().glob('.cairo.pkl'))
+  root = init()
+
+  p = Path()/'new_file.txt'
+  p.touch()
+
+  cf = changed_files(root)
+  assert p in cf

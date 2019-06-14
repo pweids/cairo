@@ -147,15 +147,24 @@ def changed_files(root: FileTree) -> List[Path]:
   """ List all files changed since the most recent version """
   time = last_save_time(root)
   changed = []
-  EPS = 40_000 # microseconds
+  
+  def is_new(fp):
+    if fp.name in ignored: return False
+    EPS = 40_000 # microseconds
+    mtime = datetime.fromtimestamp(fp.stat().st_mtime)
+    if (mtime - time).microseconds > EPS:
+      print(fp.name, mtime-time)
+      return True
+    else: return False
 
-  def go(ft, time, changed):
-    mtime = datetime.fromtimestamp(ft.filepath.stat().st_mtime)
-    if (mtime - time).microseconds >= EPS:
-      changed.append(time)
-    for c in ft.children:
-      go(c, time, changed)
-  go(root, time, changed)
+  def go(fp):
+    for f in fp.iterdir():
+      if is_new(f):
+        changed.append(f)
+      if (f.is_dir()):
+        go(f)
+
+  go(root.filepath)
   return changed
 
 
@@ -196,7 +205,7 @@ def mv_file(root: FileTree, fp: Path, parent: Path) -> FileTree:
 
 def _ignored_files(fp: Path) -> List[str]:
   """ Return a list of all file names listed in the fp ignore file """
-  ns = [IGNORE_FILE]
+  ns = ignored
   if fp.exists() and fp.is_file():
     with open(fp, 'r') as f:
       ns += f.readlines()
