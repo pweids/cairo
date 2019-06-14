@@ -108,6 +108,8 @@ def test_mv_file(cleandir):
     parent = find_file_path(root, p)
     assert parent.children != resolve(parent)['children']
 
+    assert find_file_path(root, newfp)
+
     assert len(get_versions(root)) == 1
 
 
@@ -156,9 +158,10 @@ def test_remove_file(cleandir):
 
     assert ft.ID in File_Index
     assert ft.ID not in resolve(parent)['children']
+    assert not p.exists()
 
 
-def dont_test_commit(cleandir):
+def test_commit(cleandir):
     root = init()
 
     # new file
@@ -172,12 +175,22 @@ def dont_test_commit(cleandir):
 
     # moved file
     f = Path()
-    f = f/'test_dir'/'sub_dir'/'test.txt'
+    f = f/'test_dir'/'sub_dir'/'test2.txt'
     p3 = Path()/'test_dir'/'empty_dir'
-    newfp = p3/'test.txt'
 
     mv_file(root, f, p3)
 
     # removed file
-    p4 = Path()/'test_dir'/'sub_dir'/'test2.txt'
-    rm_file(root, fp)
+    p4 = Path()/'test_dir'/'empty_dir'/'test2.txt'
+    rm_file(root, p4)
+
+    v1 = get_versions(root)
+    cf1 = changed_files(root)
+    print(cf1)
+
+    commit(root)
+
+    v2 = get_versions(root)
+    cf2 = changed_files(root)
+    assert len(v2) == (len(v1) + 1)
+    assert len(cf2) == 0

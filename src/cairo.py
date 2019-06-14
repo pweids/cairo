@@ -76,7 +76,7 @@ def get_versions(root: FileTree) -> List[Version]:
     """ Returns all of the versions in the FileTree """
     def go(ft, vs):
         vs = vs.union(set([m.version for m in ft.mods]))
-        for c in ft.children:
+        for c in _rc(ft):
             vs = go(File_Index[c], vs)
         return vs
     vs = go(root, set())
@@ -99,17 +99,17 @@ def last_changed(root: FileTree, ID: str) -> datetime:
 
 def last_save_time(root: FileTree) -> datetime:
     gv = get_versions(root)
-    return gv[-1] if gv else root.init
+    return gv[-1].time if gv else root.init
 
 
 def find_file(ft: FileTree, name: str) -> FileTree:
     """ Returns the file ID of the named file in root. Finds
     the most shallow instance
     """
-    if ft.filepath.name == name:
+    if _rfp(ft).name == name:
         return ft
     else:
-        for c in ft.children:
+        for c in _rc(ft):
             f = find_file(File_Index[c], name)
             if f:
                 return f
@@ -117,10 +117,10 @@ def find_file(ft: FileTree, name: str) -> FileTree:
 
 
 def find_file_path(ft: FileTree, fp: Path) -> FileTree:
-    if ft.filepath == fp:
+    if _rfp(ft) == fp:
         return ft
     else:
-        for c in ft.children:
+        for c in _rc(ft):
             f = find_file_path(File_Index[c], fp)
             if f:
                 return f
@@ -128,9 +128,9 @@ def find_file_path(ft: FileTree, fp: Path) -> FileTree:
 
 
 def find_file_parent(root: FileTree, child: FileTree) -> FileTree:
-    if child.ID in root.children:
+    if child.ID in _rc(root):
         return root
-    for c in root.children:
+    for c in _rc(root):
         ft = find_file_parent(File_Index[c], child)
         if ft: return ft
     return None
@@ -167,16 +167,18 @@ def init(fp: Path = Path()) -> FileTree:
 
 def changed_files(root: FileTree) -> List[Path]:
     """ List all files changed since the most recent version """
-    time = last_save_time(root)
     changed = []
 
     def is_new(fp):
-        if fp.name in ignored:
-            return False
+        if fp.name in ignored: return False
+        ft = find_file_path(root, fp)
+        if not ft: return True
+
         EPS = 40_000  # microseconds
         mtime = datetime.fromtimestamp(fp.stat().st_mtime)
-        if (mtime - time).microseconds > EPS:
-            print(fp.name, mtime-time)
+        time = last_changed(root, ft.ID)
+        
+        if mtime > time and (mtime - time).microseconds > EPS:
             return True
         else:
             return False
@@ -188,7 +190,7 @@ def changed_files(root: FileTree) -> List[Path]:
             if (f.is_dir()):
                 go(f)
 
-    go(root.filepath)
+    go(_rfp(root))
     return changed
 
 
@@ -198,7 +200,7 @@ def commit(root: FileTree) -> None:
 
 
 def save(root: FileTree) -> None:
-    tree_file = root.filepath/PKL_FILE
+    tree_file = _rfp(root)/PKL_FILE
     with open(tree_file, 'wb') as tf:
         pickle.dump(root, tf)
 
@@ -210,7 +212,7 @@ def rm_file(root: FileTree, fp: Path) -> FileTree:
     ft = find_file_path(root, fp)
     parent = find_file_parent(root, ft)
 
-    pc = copy(parent.children)
+    pc = copy(_rc(parent))
     pc.remove(ft.ID)
     _add_new_mod(parent, 'children', pc)
     _rm_file(fp)
@@ -228,8 +230,10 @@ def mv_file(root: FileTree, fp: Path, parent: Path) -> FileTree:
 
     v = _mk_ver()
 
-    p1c = copy(p1.children).remove(ft.ID)
-    p2c = copy(p2.children).append(ft.ID)
+    p1c = copy(_rc(p1))
+    p1c.remove(ft.ID)
+    p2c = copy(_rc(p2))
+    p2c.append(ft.ID)
     _add_new_mod(p1, 'children', p1c, v)
     _add_new_mod(p2, 'children', p2c, v)
 
@@ -250,6 +254,7 @@ def _ignored_files(fp: Path) -> List[str]:
 
 
 def _create_file_tree(fp: Path) -> FileTree:
+    """ Factory that builds the tree """
     if fp.name in ignored:
         return None
     if fp.is_dir():
@@ -265,12 +270,21 @@ def _create_file_tree(fp: Path) -> FileTree:
     return FileTree(fp, d, ft)
 
 
+def _rc(ft: FileTree) -> List[UUID]:
+    """ Return the children of this FileTree after being fully resolved.
+    We have to do this to keep the tree accurate after moves, removes, additions """
+    return resolve(ft).get('children', ft.children)
+
+
+def _rfp(ft: FileTree) -> Path:
+    return resolve(ft).get('filepath', ft.filepath)
+
 def _find_file(root: FileTree, ID: UUID) -> FileTree:
     if root.ID == ID:
         return root
     else:
-        for c in root.children:
-            f = _find_file(c, ID)
+        for c in _rc(root):
+            f = _find_file(File_Index[c], ID)
             if f:
                 return f
         return None
@@ -283,6 +297,10 @@ def _add_new_mod(ft: FileTree, key, val, version=None) -> None:
 
 def _mk_ver() -> Version:
     return Version(uuid1(), datetime.now())
+
+
+def _fp_in_tree(root: FileTree, fp: Path) -> bool:
+    return find_file_path(root, fp) is not None
 
 
 def _rm_file(fp):
