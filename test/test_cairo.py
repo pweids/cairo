@@ -105,13 +105,14 @@ def test_mv_file(cleandir):
   ft = find_file(root, 'test.txt')
   assert resolve(ft)['filepath'] == newfp
 
+
 def test_changed(cleandir):
   root = init()
   cf = changed_files(root)
   assert len(cf) == 0
 
   p = Path()/'test_dir'/'test.txt'
-  time.sleep(.03)
+  time.sleep(.02)
   with open(p, 'w') as f:
     f.write('change')
   
@@ -128,3 +129,32 @@ def test_new_file(cleandir):
 
   cf = changed_files(root)
   assert p in cf
+
+
+def dont_test_remove_file(cleandir):
+  p4 = Path()/'test_dir'/'sub_dir'/'test2.txt'
+  rm_file(root, fp)
+
+def dont_test_commit(cleandir):
+  root = init()
+
+  # new file
+  p = Path()/'new_file.txt'
+  p.touch()
+
+  # changed file
+  p2 = Path()/'test_dir'/'test.txt'
+  with open(p2, 'w') as f:
+    f.write('change')
+
+  # moved file
+  f = Path()
+  f = f/'test_dir'/'sub_dir'/'test.txt'
+  p3 = Path()/'test_dir'/'empty_dir'
+  newfp = p3/'test.txt'
+
+  mv_file(root, f, p3)
+
+  # removed file
+  p4 = Path()/'test_dir'/'sub_dir'/'test2.txt'
+  rm_file(root, fp)

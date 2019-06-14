@@ -1,12 +1,13 @@
 import os
 from enum import Enum
-from typing import List, Set
+from typing import List, Dict
 from dataclasses import dataclass, field
 from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid1, UUID
 import pickle
+from copy import copy
 
 IGNORE_FILE = 'ignore.txt'
 PKL_FILE = '.cairo.pkl'
@@ -38,10 +39,12 @@ class FileTree:
   mods:     List[Mod] = field(default_factory=list) # a list of modifications done to this
   init:     datetime = datetime.now() # when this file was initialized
   ID:       UUID = field(init=False)
-  children: List['FileTree'] = field(default_factory=list, init=False)
+  children: List[UUID] = field(default_factory=list, init=False)
 
   def __post_init__(self):
     self.ID = uuid1()
+    File_Index[self.ID] = self
+
     if isinstance(self.filepath, str):
       self.filepath = Path(self.filepath)
 
@@ -49,12 +52,13 @@ class FileTree:
     if self.filetype == FileType.Dir:
       for f in self.filepath.iterdir():
         ft = _create_file_tree(f)
-        if ft: self.children.append(ft)
+        if ft: self.children.append(ft.ID)
   
   def __str__(self):
     return f"FileTree(filepath='{self.filepath}', " \
       "filetype='{self.filetype}', id='{self.ID}')"
 
+File_Index = {}
 
 ## Query
 
@@ -68,7 +72,7 @@ def get_versions(root: FileTree) -> List[Version]:
   def go(ft, vs):
     vs = vs.union(set([m.version for m in ft.mods]))
     for c in ft.children:
-      vs = go(c, vs)
+      vs = go(File_Index[c], vs)
     return vs
   vs = go(root, set())
   return sorted(vs, key=lambda v: v.time, reverse=True)
@@ -100,7 +104,7 @@ def find_file(ft: FileTree, name: str) -> FileTree:
   if ft.filepath.name == name: return ft
   else:
     for c in ft.children:
-      f = find_file(c, name)
+      f = find_file(File_Index[c], name)
       if f: return f
     return None
 
@@ -109,7 +113,7 @@ def find_file_path(ft: FileTree, fp: Path) -> FileTree:
   if ft.filepath == fp: return ft
   else:
     for c in ft.children:
-      f = find_file_path(c, fp)
+      f = find_file_path(File_Index[c], fp)
       if f: return f
     return None
 
@@ -194,8 +198,10 @@ def mv_file(root: FileTree, fp: Path, parent: Path) -> FileTree:
   p2 = find_file_path(root, parent)
 
   if not all([ft, p1, p2]): return
-  p1.children.remove(ft)
-  p2.children.append(ft)
+  p1c = copy(p1.children).remove(ft.ID)
+  p2c = copy(p2.children).append(ft.ID)
+  _add_new_mod(p1, 'children', p1c)
+  _add_new_mod(p2, 'children', p2c)
 
   newfp = parent/fp.name
   fp.rename(newfp)
