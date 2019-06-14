@@ -104,6 +104,7 @@ def test_mv_file(cleandir):
     assert newfp.exists()
     ft = find_file(root, 'test.txt')
     assert resolve(ft)['filepath'] == newfp
+    assert ft.children != resolve(ft).children
 
     assert len(get_versions(root)) == 1
 
