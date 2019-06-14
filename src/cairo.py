@@ -83,25 +83,6 @@ def get_versions(root: FileTree) -> List[Version]:
     return sorted(vs, key=lambda v: v.time, reverse=True)
 
 
-def get_versions_of_file(root: FileTree, ID: str) -> List[Version]:
-    """ Return all the versions for a specific file """
-    f = _find_file(root, ID)
-    return [m.version for m in f.mods] if f else None
-
-
-def last_changed(root: FileTree, ID: str) -> datetime:
-    f = _find_file(root, ID)
-    if f:
-        return f.mods[-1].version.time if f.mods else f.init
-    else:
-        return None
-
-
-def last_save_time(root: FileTree) -> datetime:
-    gv = get_versions(root)
-    return gv[-1].time if gv else root.init
-
-
 def find_file(ft: FileTree, name: str) -> FileTree:
     """ Returns the file ID of the named file in root. Finds
     the most shallow instance
@@ -159,7 +140,7 @@ def init(fp: Path = Path()) -> FileTree:
             return pickle.load(tf)
     except:
         ft = _create_file_tree(fp)
-        save(ft)
+        _save_tree(ft)
         return ft
 
 
@@ -177,7 +158,7 @@ def changed_files(root: FileTree) -> List[Path]:
 
         EPS = 40_000  # microseconds
         mtime = _mod_time(fp)
-        time = last_changed(root, ft.ID)
+        time = _last_changed(root, ft.ID)
         
         if mtime > time and (mtime - time).microseconds > EPS:
             print(f"{fp} is new: {mtime}, {time}, {(mtime-time).microseconds}")
@@ -207,21 +188,7 @@ def commit(root: FileTree) -> None:
             _add_file_to_tree(root, fp, v)
         else:
             _add_new_mod(ft, 'data', data, v)
-
-def _add_file_to_tree(root, fp, version = None):
-    version = version or _mk_ver()
-    parent = find_file_path(root, fp.parent)
-    newft = _create_file_tree(fp)
-    newft.init = max(newft.init, _mod_time(fp))
-    pc = copy(parent.children)
-    pc.append(newft.ID)
-    _add_new_mod(parent, 'children', pc, version)
-
-
-def save(root: FileTree) -> None:
-    tree_file = _rfp(root)/PKL_FILE
-    with open(tree_file, 'wb') as tf:
-        pickle.dump(root, tf)
+    _save_tree(root)
 
 
 # Commands
@@ -260,8 +227,31 @@ def mv_file(root: FileTree, fp: Path, parent: Path) -> FileTree:
     fp.rename(newfp)
     _add_new_mod(ft, 'filepath', newfp, v)
 
+def _add_file_to_tree(root, fp, version = None):
+    version = version or _mk_ver()
+    parent = find_file_path(root, fp.parent)
+    newft = _create_file_tree(fp)
+    newft.init = max(newft.init, _mod_time(fp))
+    pc = copy(parent.children)
+    pc.append(newft.ID)
+    _add_new_mod(parent, 'children', pc, version)
+
 
 # helpers
+
+def _save_tree(root: FileTree) -> None:
+    tree_file = _rfp(root)/PKL_FILE
+    with open(tree_file, 'wb') as tf:
+        pickle.dump(root, tf)
+
+
+def _last_changed(root: FileTree, ID: str) -> datetime:
+    f = _find_file(root, ID)
+    if f:
+        return f.mods[-1].version.time if f.mods else f.init
+    else:
+        return None
+
 
 def _ignored_files(fp: Path) -> List[str]:
     """ Return a list of all file names listed in the fp ignore file """
