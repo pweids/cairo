@@ -144,7 +144,7 @@ def test_find_file_parent(cleandir):
     pfp = Path()/'test_dir'
 
     pt = find_file_parent(root, child)
-    assert pt.filepath == pfp
+    assert pt.path == pfp
 
 
 

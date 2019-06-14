@@ -29,7 +29,7 @@ class Mod:
 
 @dataclass
 class FileTree:
-    filepath: Path           # this file's name. Not using paths here
+    path:     Path           # this file's name. Not using paths here
     data:     str            # the textual data in this file if Text file
     mods:     List[Mod] = field(default_factory=list)
     init:     datetime = field(init=False)  # when this file was initialized
@@ -40,20 +40,20 @@ class FileTree:
         self.ID = uuid1()
         File_Index[self.ID] = self
 
-        self.init = max(datetime.now(), _mod_time(self.filepath))
+        self.init = max(datetime.now(), _mod_time(self.path))
         
-        if isinstance(self.filepath, str):
-            self.filepath = Path(self.filepath)
+        if isinstance(self.path, str):
+            self.path = Path(self.path)
 
-        if self.filepath.is_dir():
-            for f in self.filepath.iterdir():
+        if self.path.is_dir():
+            for f in self.path.iterdir():
                 ft = _create_file_tree(f)
                 if ft:
                     self.children.append(ft.ID)
 
     def __str__(self):
-        return f"FileTree(filepath='{self.filepath}', " \
-            "filetype='{self.filetype}', id='{self.ID}')"
+        return f"FileTree(path='{self.path}', " \
+             "id='{self.ID}')"
 
 
 File_Index = {}
@@ -270,7 +270,7 @@ def _rc(ft: FileTree) -> List[UUID]:
 
 
 def _rfp(ft: FileTree) -> Path:
-    return resolve(ft).get('filepath', ft.filepath)
+    return resolve(ft).get('filepath', ft.path)
 
 def _find_file(root: FileTree, ID: UUID) -> FileTree:
     if root.ID == ID:
