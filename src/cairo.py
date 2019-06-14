@@ -172,31 +172,50 @@ def changed_files(root: FileTree) -> List[Path]:
     def is_new(fp):
         if fp.name in ignored: return False
         ft = find_file_path(root, fp)
-        if not ft: return True
+        if not ft: 
+            return True
 
         EPS = 40_000  # microseconds
-        mtime = datetime.fromtimestamp(fp.stat().st_mtime)
+        mtime = _mod_time(fp)
         time = last_changed(root, ft.ID)
         
         if mtime > time and (mtime - time).microseconds > EPS:
+            print(f"{fp} is new: {mtime}, {time}, {(mtime-time).microseconds}")
             return True
         else:
             return False
 
     def go(fp):
         for f in fp.iterdir():
-            if is_new(f):
-                changed.append(f)
             if (f.is_dir()):
                 go(f)
+            elif is_new(f):
+                changed.append(f)
 
     go(_rfp(root))
     return changed
 
 
 def commit(root: FileTree) -> None:
-    """ Commit all modifcations in the local directory to the data structure """
-    pass
+    """ Commit all data modifcations in the local directory to the data structure """
+    v = _mk_ver()
+    for fp in changed_files(root):
+        ft = find_file_path(root, fp)
+        with open(fp, 'r') as f:
+            data = f.read()
+        if not ft:
+            _add_file_to_tree(root, fp, v)
+        else:
+            _add_new_mod(ft, 'data', data, v)
+
+def _add_file_to_tree(root, fp, version = None):
+    version = version or _mk_ver()
+    parent = find_file_path(root, fp.parent)
+    newft = _create_file_tree(fp)
+    newft.init = max(newft.init, _mod_time(fp))
+    pc = copy(parent.children)
+    pc.append(newft.ID)
+    _add_new_mod(parent, 'children', pc, version)
 
 
 def save(root: FileTree) -> None:
@@ -241,8 +260,8 @@ def mv_file(root: FileTree, fp: Path, parent: Path) -> FileTree:
     fp.rename(newfp)
     _add_new_mod(ft, 'filepath', newfp, v)
 
-# helpers
 
+# helpers
 
 def _ignored_files(fp: Path) -> List[str]:
     """ Return a list of all file names listed in the fp ignore file """
@@ -301,6 +320,9 @@ def _mk_ver() -> Version:
 
 def _fp_in_tree(root: FileTree, fp: Path) -> bool:
     return find_file_path(root, fp) is not None
+
+def _mod_time(fp: Path) -> datetime:
+    return datetime.fromtimestamp(fp.stat().st_mtime)
 
 
 def _rm_file(fp):

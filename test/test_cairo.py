@@ -186,10 +186,11 @@ def test_commit(cleandir):
 
     v1 = get_versions(root)
     cf1 = changed_files(root)
-    print(cf1)
 
     commit(root)
 
+    assert find_file_path(root, p)
+    print('now go')
     v2 = get_versions(root)
     cf2 = changed_files(root)
     assert len(v2) == (len(v1) + 1)
