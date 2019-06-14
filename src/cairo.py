@@ -34,7 +34,7 @@ class FileTree:
     mods:     List[Mod] = field(default_factory=list)
     init:     datetime = field(init=False)  # when this file was initialized
     ID:       UUID = field(init=False)
-    children: List[UUID] = field(default_factory=list, init=False)
+    children: List[UUID] = field(default_factory=set, init=False)
 
     def __post_init__(self):
         self.ID = uuid1()
@@ -49,7 +49,7 @@ class FileTree:
             for f in self.path.iterdir():
                 ft = _create_file_tree(f)
                 if ft:
-                    self.children.append(ft.ID)
+                    self.children.add(ft.ID)
 
     def __str__(self):
         return f"FileTree(path='{self.path}', " \
@@ -61,9 +61,21 @@ File_Index = {}
 
 # Query
 
-def ft_at_time(root: FileTree, dt: datetime) -> FileTree:
+def ft_at_time(root: FileTree, dt: datetime) -> None:
     """ Return this FileTree's state at the specified time """
-    pass
+    current = resolve(root)
+    former = resolve(root, dt)
+
+    if (current.path != former.path):
+        pass # case 1
+    if (current.data != former.data):
+        pass # case 2
+    if (current.children != former.children):
+        pass #case 3
+    
+    for c in _rfc(root):
+        ft_at_time(c, dt)
+
 
 
 def get_versions(root: FileTree) -> List[Version]:
@@ -111,11 +123,12 @@ def find_file_parent(root: FileTree, child: FileTree) -> FileTree:
     return None
 
 
-def resolve(ft: FileTree) -> dict:
+def resolve(ft: FileTree, stop_time: datetime = None) -> dict:
     """ Return the contents of the file after all modifications """
     data = {}
     for m in ft.mods:
-        data[m.field] = m.value
+        if not stop_time or m.version.time <= stop_time:
+            data[m.field] = m.value
     return data
 
 
@@ -207,7 +220,7 @@ def mv_file(root: FileTree, fp: Path, parent: Path) -> FileTree:
     p1c = copy(_rc(p1))
     p1c.remove(ft.ID)
     p2c = copy(_rc(p2))
-    p2c.append(ft.ID)
+    p2c.add(ft.ID)
     _add_new_mod(p1, 'children', p1c, v)
     _add_new_mod(p2, 'children', p2c, v)
 
@@ -220,7 +233,7 @@ def _add_file_to_tree(root, fp, version = None):
     parent = find_file_path(root, fp.parent)
     newft = _create_file_tree(fp)
     pc = copy(parent.children)
-    pc.append(newft.ID)
+    pc.add(newft.ID)
     _add_new_mod(parent, 'children', pc, version)
 
 
