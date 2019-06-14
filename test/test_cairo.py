@@ -1,4 +1,3 @@
-from cairo import *
 import tempfile
 import os
 import sys
@@ -10,6 +9,7 @@ from datetime import datetime
 import time
 
 sys.path.append('./src')
+from cairo import *
 
 
 @pytest.fixture
@@ -104,7 +104,9 @@ def test_mv_file(cleandir):
     assert newfp.exists()
     ft = find_file(root, 'test.txt')
     assert resolve(ft)['filepath'] == newfp
-    assert ft.children != resolve(ft).children
+
+    parent = find_file_path(root, p)
+    assert parent.children != resolve(parent)['children']
 
     assert len(get_versions(root)) == 1
 
@@ -134,9 +136,26 @@ def test_new_file(cleandir):
     assert p in cf
 
 
-def dont_test_remove_file(cleandir):
-    p4 = Path()/'test_dir'/'sub_dir'/'test2.txt'
-    rm_file(root, fp)
+def test_find_file_parent(cleandir):
+    root = init()
+    child = find_file(root, 'test.txt')
+    pfp = Path()/'test_dir'
+
+    pt = find_file_parent(root, child)
+    assert pt.filepath == pfp
+
+
+
+def test_remove_file(cleandir):
+    root = init()
+    p = Path()/'test_dir'/'sub_dir'/'test2.txt'
+    ft = find_file_path(root, p)
+    parent = find_file_parent(root, ft)
+    print(ft.ID)
+    rm_file(root, p)
+
+    assert ft.ID in File_Index
+    assert ft.ID not in resolve(parent)['children']
 
 
 def dont_test_commit(cleandir):

@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import uuid1, UUID
 import pickle
 from copy import copy
+from shutil import rmtree
 
 IGNORE_FILE = 'ignore.txt'
 PKL_FILE = '.cairo.pkl'
@@ -126,6 +127,15 @@ def find_file_path(ft: FileTree, fp: Path) -> FileTree:
         return None
 
 
+def find_file_parent(root: FileTree, child: FileTree) -> FileTree:
+    if child.ID in root.children:
+        return root
+    for c in root.children:
+        ft = find_file_parent(File_Index[c], child)
+        if ft: return ft
+    return None
+
+
 def resolve(ft: FileTree) -> dict:
     """ Return the contents of the file after all modifications """
     data = {}
@@ -197,7 +207,13 @@ def save(root: FileTree) -> None:
 
 def rm_file(root: FileTree, fp: Path) -> FileTree:
     """ Remove the file from the FileTree """
-    pass
+    ft = find_file_path(root, fp)
+    parent = find_file_parent(root, ft)
+
+    pc = copy(parent.children)
+    pc.remove(ft.ID)
+    _add_new_mod(parent, 'children', pc)
+    _rm_file(fp)
 
 
 def mv_file(root: FileTree, fp: Path, parent: Path) -> FileTree:
@@ -267,3 +283,10 @@ def _add_new_mod(ft: FileTree, key, val, version=None) -> None:
 
 def _mk_ver() -> Version:
     return Version(uuid1(), datetime.now())
+
+
+def _rm_file(fp):
+    if fp.is_dir(): 
+        rmtree(fp)
+    else:
+        fp.unlink()
