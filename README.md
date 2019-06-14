@@ -11,19 +11,15 @@ This code here is a prototype in Python to prove the concept and create a refere
 The main data structures are as follows:
 
 ```haskell
-data FileType = Dir | Txt | Bin
+data Version = Version UUID UTCTime
 
-type VerID = String
-
-data Version = Version VerID UTCTime
-
-data File = File {
-  Name     :: Text,
-  FileData :: Data.ByteString,
-  Children :: [File],
-  Type     :: FileType,
-  ID       :: String,
-  Mods     :: [Mod]
+data FileTree = FileTree {
+  path     :: Path,
+  data     :: str,
+  children :: Set UUID,
+  init     :: datetime,
+  ID       :: UUID,
+  mods     :: [Mod]
 }
 
 -- Modifications/Changes to the version
@@ -33,3 +29,5 @@ data Mod = Mod {
   Value   :: Text      -- This could be anything. Not sure how to do this
 }
 ```
+
+The `FileTree` structure's attributes are fixed when they are first seen. To get the current version of a file, the `mods` are applied in order. This allows us to stop application (termed "resolution" in Cairo) at a specific moment in time to explore the FileTree structure then.
