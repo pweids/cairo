@@ -27,20 +27,12 @@ class Mod:
     value:   str     # the value at this version num
 
 
-class FileType(Enum):
-    Dir = 1
-    Text = 2
-    #Image = 3
-
-
 @dataclass
 class FileTree:
     filepath: Path           # this file's name. Not using paths here
     data:     str            # the textual data in this file if Text file
-    filetype: FileType
-    # a list of modifications done to this
     mods:     List[Mod] = field(default_factory=list)
-    init:     datetime = datetime.now()  # when this file was initialized
+    init:     datetime = field(init=False)  # when this file was initialized
     ID:       UUID = field(init=False)
     children: List[UUID] = field(default_factory=list, init=False)
 
@@ -48,10 +40,12 @@ class FileTree:
         self.ID = uuid1()
         File_Index[self.ID] = self
 
+        self.init = max(datetime.now(), _mod_time(self.filepath))
+        
         if isinstance(self.filepath, str):
             self.filepath = Path(self.filepath)
 
-        if self.filetype == FileType.Dir:
+        if self.filepath.is_dir():
             for f in self.filepath.iterdir():
                 ft = _create_file_tree(f)
                 if ft:
@@ -153,18 +147,12 @@ def changed_files(root: FileTree) -> List[Path]:
     def is_new(fp):
         if fp.name in ignored: return False
         ft = find_file_path(root, fp)
-        if not ft: 
-            return True
+        if not ft: return True
 
-        EPS = 40_000  # microseconds
         mtime = _mod_time(fp)
         time = _last_changed(root, ft.ID)
         
-        if mtime > time and (mtime - time).microseconds > EPS:
-            print(f"{fp} is new: {mtime}, {time}, {(mtime-time).microseconds}")
-            return True
-        else:
-            return False
+        return mtime > time
 
     def go(fp):
         for f in fp.iterdir():
@@ -231,7 +219,6 @@ def _add_file_to_tree(root, fp, version = None):
     version = version or _mk_ver()
     parent = find_file_path(root, fp.parent)
     newft = _create_file_tree(fp)
-    newft.init = max(newft.init, _mod_time(fp))
     pc = copy(parent.children)
     pc.append(newft.ID)
     _add_new_mod(parent, 'children', pc, version)
@@ -264,19 +251,16 @@ def _ignored_files(fp: Path) -> List[str]:
 
 def _create_file_tree(fp: Path) -> FileTree:
     """ Factory that builds the tree """
-    if fp.name in ignored:
-        return None
+    if fp.name in ignored: return None
     if fp.is_dir():
-        ft = FileType.Dir
         d = None
     else:
-        ft = FileType.Text
         try:
             with open(fp, 'r') as f:
                 d = f.read()
         except:
             return None
-    return FileTree(fp, d, ft)
+    return FileTree(fp, d)
 
 
 def _rc(ft: FileTree) -> List[UUID]:
