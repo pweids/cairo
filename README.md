@@ -11,7 +11,7 @@ This code here is a prototype in Python to prove the concept and create a refere
 The main data structures are as follows:
 
 ```haskell
-data Version = Version UUID UTCTime
+data Version = Version UUID datetime
 
 data FileTree = FileTree {
   path     :: Path,

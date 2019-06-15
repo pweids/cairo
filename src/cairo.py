@@ -160,20 +160,33 @@ def changed_files(root: FileTree) -> List[Path]:
     def is_new(fp):
         if fp.name in ignored: return False
         ft = find_file_path(root, fp)
-        if not ft: return True
+        return not ft
 
+    def is_modified(fp):
         mtime = _mod_time(fp)
-        time = _last_changed(root, ft.ID)
+        time = _last_changed(root, fp)
         
-        return mtime > time
+        return time is not None and mtime > time
+
+    def is_moved(parent, child):
+        child = find_file_path(root, child)
+        if not child: return False
+        parent = find_file_parent(root, child)
+        
+        return child.ID not in _rc(parent)
 
     def go(fp):
         for f in fp.iterdir():
+            if is_new(f):
+                changed.append((f, "new"))
+            elif is_modified(f):
+                changed.append((f, "mod"))
+            elif is_moved(fp, f):
+                changed.append((f, "mov"))
+            
             if (f.is_dir()):
                 go(f)
-            elif is_new(f):
-                changed.append(f)
-
+    
     go(_rfp(root))
     return changed
 
@@ -181,7 +194,7 @@ def changed_files(root: FileTree) -> List[Path]:
 def commit(root: FileTree) -> None:
     """ Commit all data modifcations in the local directory to the data structure """
     v = _mk_ver()
-    for fp in changed_files(root):
+    for fp, _ in changed_files(root):
         ft = find_file_path(root, fp)
         with open(fp, 'r') as f:
             data = f.read()
@@ -245,8 +258,8 @@ def _save_tree(root: FileTree) -> None:
         pickle.dump(root, tf)
 
 
-def _last_changed(root: FileTree, ID: str) -> datetime:
-    f = _find_file(root, ID)
+def _last_changed(root: FileTree, fp: Path) -> datetime:
+    f = find_file_path(root, fp)
     if f:
         return f.mods[-1].version.time if f.mods else f.init
     else:

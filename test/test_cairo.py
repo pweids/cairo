@@ -135,7 +135,18 @@ def test_new_file(cleandir):
     p.touch()
 
     cf = changed_files(root)
-    assert p in cf
+    assert (p, "new") in cf
+
+
+def test_new_dir(cleandir):
+    assert not list(Path().glob('.cairo.pkl'))
+    root = init()
+
+    p = Path()/'new_dir'
+    p.mkdir()
+
+    cf = changed_files(root)
+    assert (p, "new") in cf
 
 
 def test_find_file_parent(cleandir):
@@ -190,8 +201,8 @@ def test_commit(cleandir):
     commit(root)
 
     assert find_file_path(root, p)
-    print('now go')
     v2 = get_versions(root)
     cf2 = changed_files(root)
+    print(cf2)
     assert len(v2) == (len(v1) + 1)
     assert len(cf2) == 0
