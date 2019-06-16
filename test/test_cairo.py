@@ -21,6 +21,8 @@ def cleandir():
     (newpath/'test_dir'/'empty_dir').mkdir()
     (newpath/'test_dir'/'sub_dir').mkdir()
     (newpath/'test_dir'/'sub_dir'/'test2.txt').touch()
+    (newpath/'test3.txt').touch()
+    (newpath/'test4.txt').touch()
     (newpath/'ignore_me.txt').touch()
 
     ignore = newpath/IGNORE_FILE
@@ -158,6 +160,16 @@ def test_find_file_parent(cleandir):
     assert pt.path == pfp
 
 
+def test_move_file(cleandir):
+    root = init()
+    src = Path()/'test_dir'/'test.txt'
+    dest = Path()/'test_dir'/'empty_dir'/'test.txt'
+    src.rename(dest)
+
+    cf = changed_files(root)
+    assert (dest, "new") in cf
+    assert (src, "rmv") in cf
+
 
 def test_remove_file(cleandir):
     root = init()
@@ -170,6 +182,13 @@ def test_remove_file(cleandir):
     assert ft.ID in File_Index
     assert ft.ID not in resolve(parent)['children']
     assert not p.exists()
+
+
+def test_remove_file2(cleandir):
+    root = init()
+    p = Path()/'test_dir'/'sub_dir'/'test2.txt'
+    p.unlink()
+    assert (p, "rmv") in changed_files(root)
 
 
 def test_commit(cleandir):
@@ -188,21 +207,29 @@ def test_commit(cleandir):
     f = Path()
     f = f/'test_dir'/'sub_dir'/'test2.txt'
     p3 = Path()/'test_dir'/'empty_dir'
-
     mv_file(root, f, p3)
+
+    # moved file 2
+    f = Path()/'test3.txt'
+    dest = Path()/'test_dir'/'test3.txt'
+    f.rename(dest)
 
     # removed file
     p4 = Path()/'test_dir'/'empty_dir'/'test2.txt'
     rm_file(root, p4)
 
+    # removed file 2
+    p5 = Path()/'test4.txt'
+    p5.unlink()
+
     v1 = get_versions(root)
     cf1 = changed_files(root)
-
+    
     commit(root)
 
     assert find_file_path(root, p)
     v2 = get_versions(root)
     cf2 = changed_files(root)
     print(cf2)
-    assert len(v2) == (len(v1) + 1)
+    assert len(v2) == (len(v1) + 3)
     assert len(cf2) == 0

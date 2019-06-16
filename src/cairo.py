@@ -1,6 +1,6 @@
 import os
 from enum import Enum
-from typing import List, Dict
+from typing import List, Dict, Set
 from dataclasses import dataclass, field
 from collections import namedtuple
 from datetime import datetime
@@ -75,7 +75,6 @@ def ft_at_time(root: FileTree, dt: datetime) -> None:
     
     for c in _rfc(root):
         ft_at_time(c, dt)
-
 
 
 def get_versions(root: FileTree) -> List[Version]:
@@ -168,33 +167,27 @@ def changed_files(root: FileTree) -> List[Path]:
         
         return time is not None and mtime > time
 
-    def is_moved(parent, child):
-        child = find_file_path(root, child)
-        if not child: return False
-        parent = find_file_parent(root, child)
-        
-        return child.ID not in _rc(parent)
-
-    def go(fp):
-        for f in fp.iterdir():
-            if is_new(f):
-                changed.append((f, "new"))
-            elif is_modified(f):
-                changed.append((f, "mod"))
-            elif is_moved(fp, f):
-                changed.append((f, "mov"))
-            
-            if (f.is_dir()):
-                go(f)
+    files, ft_files = _make_sets(root)
+    diff = ft_files - files
+    for f in files:
+        if is_new(f):
+            changed.append((f, "new"))
+        elif is_modified(f):
+            changed.append((f, "mod"))
     
-    go(_rfp(root))
+    for f in diff:
+        changed.append((f, "rmv"))
+    
     return changed
 
 
 def commit(root: FileTree) -> None:
     """ Commit all data modifcations in the local directory to the data structure """
     v = _mk_ver()
-    for fp, _ in changed_files(root):
+    for fp, chng in changed_files(root):
+        if chng == 'rmv': 
+            rm_file(root, fp)
+            continue
         ft = find_file_path(root, fp)
         with open(fp, 'r') as f:
             data = f.read()
@@ -210,12 +203,13 @@ def commit(root: FileTree) -> None:
 def rm_file(root: FileTree, fp: Path) -> FileTree:
     """ Remove the file from the FileTree """
     ft = find_file_path(root, fp)
+    if not ft: return
     parent = find_file_parent(root, ft)
 
     pc = copy(_rc(parent))
     pc.remove(ft.ID)
     _add_new_mod(parent, 'children', pc)
-    _rm_file(fp)
+    _rm_f_or_d(fp)
 
 
 def mv_file(root: FileTree, fp: Path, parent: Path) -> FileTree:
@@ -324,9 +318,26 @@ def _fp_in_tree(root: FileTree, fp: Path) -> bool:
 def _mod_time(fp: Path) -> datetime:
     return datetime.fromtimestamp(fp.stat().st_mtime)
 
+def _make_sets(root: FileTree) -> (Set[Path], Set[Path]):
+    files = (set(_rfp(root).glob('**/*')))
+    files -= set(filter(lambda p: any(n in ignored for n in str(p).split('/')), files))
+    ft_files = _tree_to_set(root)
+    ft_files.remove(_rfp(root))
+    return files, ft_files
 
-def _rm_file(fp):
-    if fp.is_dir(): 
-        rmtree(fp)
-    else:
-        fp.unlink()
+def _tree_to_set(node: FileTree, s = None) -> Set[Path]:
+    s = s or set()
+    s.add(_rfp(node))
+    for c in _rc(node):
+        _tree_to_set(File_Index[c], s)
+    return s
+
+def _rm_f_or_d(fp):
+    print(fp)
+    try:
+        if fp.is_dir(): 
+            rmtree(fp)
+        else:
+            fp.unlink()
+    except:
+        pass
