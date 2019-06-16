@@ -186,7 +186,7 @@ def commit(root: FileTree) -> None:
     v = _mk_ver()
     for fp, chng in changed_files(root):
         if chng == 'rmv': 
-            rm_file(root, fp)
+            rm_file(root, fp, v)
             continue
         ft = find_file_path(root, fp)
         with open(fp, 'r') as f:
@@ -200,7 +200,7 @@ def commit(root: FileTree) -> None:
 
 # Commands
 
-def rm_file(root: FileTree, fp: Path) -> FileTree:
+def rm_file(root: FileTree, fp: Path, version = None) -> FileTree:
     """ Remove the file from the FileTree """
     ft = find_file_path(root, fp)
     if not ft: return
@@ -208,11 +208,11 @@ def rm_file(root: FileTree, fp: Path) -> FileTree:
 
     pc = copy(_rc(parent))
     pc.remove(ft.ID)
-    _add_new_mod(parent, 'children', pc)
+    _add_new_mod(parent, 'children', pc, version)
     _rm_f_or_d(fp)
 
 
-def mv_file(root: FileTree, fp: Path, parent: Path) -> FileTree:
+def mv_file(root: FileTree, fp: Path, parent: Path, version = None) -> FileTree:
     """ Move "file" to "parent" directory """
     assert parent.is_dir()
     ft = find_file_path(root, fp)
@@ -222,7 +222,7 @@ def mv_file(root: FileTree, fp: Path, parent: Path) -> FileTree:
     if not all([ft, p1, p2]):
         return
 
-    v = _mk_ver()
+    v = version or _mk_ver()
 
     p1c = copy(_rc(p1))
     p1c.remove(ft.ID)
