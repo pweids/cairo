@@ -5,7 +5,7 @@ import pytest
 from shutil import rmtree
 from pathlib import Path
 from uuid import uuid1
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 
 testdir = os.path.dirname(__file__)
@@ -243,3 +243,18 @@ def test_commit(cleandir):
     print(cf2)
     assert len(v2) == (len(v1) + 1)
     assert len(cf2) == 0
+
+
+def dont_test_path_change_in_time(cleandir):
+    root = c.init()
+    c.mv_file(root, Path()/'test3.txt', Path()/'test_dir')
+
+    vtime = c.get_versions(root)[-1].time
+    before = vtime - timedelta(microseconds=1)
+    after = vtime + timedelta(microseconds=2)
+    
+    ft_before = c.ft_at_time(root, before)
+    ft_after  = c.ft_at_time(root, after)
+
+    assert c.find_file(ft_before, Path()/'test3.txt')
+    assert not c.find_file(ft_after, Path()/'test3.txt')

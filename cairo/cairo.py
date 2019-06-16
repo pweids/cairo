@@ -45,12 +45,6 @@ class FileTree:
         if isinstance(self.path, str):
             self.path = Path(self.path)
 
-        if self.path.is_dir():
-            for f in self.path.iterdir():
-                ft = _create_file_tree(f)
-                if ft:
-                    self.children.add(ft.ID)
-
     def __str__(self):
         return f"FileTree(path='{self.path}', " \
              "id='{self.ID}')"
@@ -73,7 +67,7 @@ def ft_at_time(root: FileTree, dt: datetime) -> None:
     if (current.children != former.children):
         pass #case 3
     
-    for c in _rfc(root):
+    for c in _rc(root):
         ft_at_time(c, dt)
 
 
@@ -273,14 +267,19 @@ def _create_file_tree(fp: Path) -> FileTree:
     """ Factory that builds the tree """
     if fp.name in ignored: return None
     if fp.is_dir():
-        d = None
+        ft = FileTree(fp, None)
+        for f in ft.path.iterdir():
+            child = _create_file_tree(f)
+            if child:
+                ft.children.add(child.ID)
+        return ft
     else:
         try:
             with open(fp, 'r') as f:
                 d = f.read()
+            return FileTree(fp, d)
         except:
             return None
-    return FileTree(fp, d)
 
 
 def _rc(ft: FileTree) -> List[UUID]:
