@@ -294,8 +294,7 @@ def test_add_file_change_in_time(cleandir):
 
     c.commit(root)
 
-    vs = c.get_versions(root)
-    vtime = vs[-1].time
+    vtime = c.get_versions(root)[-1].time
     before = vtime - timedelta(microseconds=10)
     after = vtime + timedelta(microseconds=10)
 
@@ -304,3 +303,58 @@ def test_add_file_change_in_time(cleandir):
 
     c.ft_at_time(root, after)
     assert p.exists()
+
+
+def test_data_change_in_time(cleandir):
+    root = c.init()
+    p = Path()/'test_dir'/'test.txt'
+    with open(p, 'r') as f:
+        old_data = f.read()
+
+    time.sleep(.02)
+    with open(p, 'w') as f:
+        f.write('change')
+    
+    c.commit(root)
+    vtime = c.get_versions(root)[-1].time
+    before = vtime - timedelta(microseconds=10)
+    after = vtime + timedelta(microseconds=10)
+
+    c.ft_at_time(root, before)
+    with open(p, 'r') as f:
+        data = f.read()
+    assert data == old_data
+
+    c.ft_at_time(root, after)
+    with open(p, 'r') as f:
+        data = f.read()
+    assert data == "change"
+
+
+def test_move_and_data_change_in_time(cleandir):
+    root = c.init()
+    src = Path()/'test_dir'/'test.txt'
+    dest = Path()/'test_dir'/'empty_dir'/'test.txt'
+    src.rename(dest)
+    
+    with open(dest, 'r') as f:
+        old_data = f.read()
+
+    time.sleep(.02)
+    with open(dest, 'w') as f:
+        f.write('change')
+
+    c.commit(root)
+    vtime = c.get_versions(root)[-1].time
+    before = vtime - timedelta(microseconds=10)
+    after = vtime + timedelta(microseconds=10)
+
+    c.ft_at_time(root, before)
+    with open(src, 'r') as f:
+        data = f.read()
+    assert data == old_data
+
+    c.ft_at_time(root, after)
+    with open(dest, 'r') as f:
+        data = f.read()
+    assert data == "change"

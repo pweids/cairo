@@ -68,23 +68,23 @@ def ft_at_time(node: FileTree, dt: datetime) -> None:
 
     change_time = False
     if (node.init > dt and node.path.exists()):
+        # node was created after dt
         _rm_f_or_d(node.path)
         change_time = True
-        print(node.path, "change0")
+
     if (_rfp(node, node.curr_dt) != _rfp(node, dt)):
         # file has moved
-        print(node.path, "change1")
-
         _rfp(node, node.curr_dt).rename(_rfp(node, dt))
         change_time = True
+
     if (_rd(node, node.curr_dt) != _rd(node, dt)):
         # data has changed
-        print(node.path, "change2")
+        with open(_rfp(node, dt), 'w') as f:
+            f.write(_rd(node, dt))
         change_time = True
-        pass # case 2
+
     if (_rc(node, node.curr_dt) != _rc(node, dt)):
         # node has been removed
-        print(node.path, "change3")
         curr_chld = _rc(node, node.curr_dt)
         dt_chld = _rc(node, dt)
         _add_children(dt_chld - curr_chld, dt)
