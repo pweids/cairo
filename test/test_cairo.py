@@ -174,7 +174,6 @@ def test_remove_file(cleandir):
     print(ft.ID)
     c.rm_file(root, p)
 
-    assert ft.ID in c.File_Index
     assert ft.ID not in c.resolve(parent)['children']
     assert not p.exists()
 
@@ -356,3 +355,48 @@ def test_search_all_after_mod(cleandir):
 
     assert c.search_all(root, "test1")
     assert c.search_all(root, "new")
+
+
+def test_empty_search(cleandir):
+    root = c.init()
+
+    assert not c.search_all(root, "should not be there")
+
+
+def test_search_all_after_move(cleandir):
+    root = c.init()
+    src = Path()/'test_dir'/'test.txt'
+    dest = Path()/'test_dir'/'empty_dir'
+    c.mv_file(root, src, dest)
+
+    vs = c.search_all(root, "test1")
+    assert len(vs) == 2
+    a = vs.pop()[0]
+    b = vs.pop()[0]
+    assert a != b
+    assert a == src or b == src
+    assert a == (dest/'test.txt') or b == (dest/'test.txt')
+
+
+def test_search_file(cleandir):
+    root = c.init()
+    assert c.search_file(root, Path()/'test_dir'/'test.txt', 'test1')
+    assert not c.search_file(root, Path()/'test3.txt', 'test1')
+
+
+def test_search_file_not_in_root(cleandir):
+    root = c.init()
+    p = Path('../test.txt')
+    p.touch()
+    p.write_text('test2')
+
+    assert not c.search_file(root, p, 'test2')
+    p.unlink()
+
+
+def test_search_removed_file(cleandir):
+    root = c.init()
+    p = Path()/'test_dir'/'test.txt'
+    c.rm_file(root, p)
+
+    assert c.search_all(root, 'test1')

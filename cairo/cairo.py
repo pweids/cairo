@@ -44,7 +44,7 @@ class FileTree:
              "id='{self.ID}')"
 
 
-File_Index = {}
+_file_index = {}
 
 
 class CairoException(BaseException): pass
@@ -80,19 +80,27 @@ def ft_at_time(node: FileTree, dt: datetime) -> None:
     node.curr_dt = dt
 
     for c in _rc(node):
-        ft_at_time(File_Index[c], dt)
+        ft_at_time(_file_index[c], dt)
 
 
 def search_all(root: FileTree, query: str) \
         -> Set[Tuple[Path, Optional[Version]]]:
+    """ Returns a set of paths/versions for all files in which
+    this query appeared. If a file was moved but the data was the same,
+    it will return a version for each location.
+    """
     vs = set()
-    for _, ft in File_Index.items():
+    for _, ft in _file_index.items():
         if _rfp(ft).is_dir() \
             or not _is_subpath(root.path, ft.path): continue
         vs = vs.union(_query_in_data(ft, query))
     return vs
 
 
+def search_file(root: FileTree, fp: Path, query: str) \
+        -> Set[Tuple[Path, Optional[Version]]]:
+    all_vs = search_all(root, query)
+    return set(filter(lambda v: v[0] == fp, all_vs))
 
 
 def get_versions(root: FileTree) -> List[Version]:
@@ -100,7 +108,7 @@ def get_versions(root: FileTree) -> List[Version]:
     def go(ft, vs):
         vs = vs.union(set([m.version for m in ft.mods]))
         for c in _rc(ft):
-            vs = go(File_Index[c], vs)
+            vs = go(_file_index[c], vs)
         return vs
     vs = go(root, set())
     return sorted(vs, key=lambda v: v.time, reverse=True)
@@ -114,7 +122,7 @@ def find_file(ft: FileTree, name: str) -> Optional[FileTree]:
         return ft
     else:
         for c in _rc(ft):
-            f = find_file(File_Index[c], name)
+            f = find_file(_file_index[c], name)
             if f:
                 return f
         return None
@@ -125,7 +133,7 @@ def find_file_path(ft: FileTree, fp: Path) -> Optional[FileTree]:
         return ft
     else:
         for c in _rc(ft):
-            f = find_file_path(File_Index[c], fp)
+            f = find_file_path(_file_index[c], fp)
             if f:
                 return f
         return None
@@ -136,7 +144,7 @@ def find_file_parent(root: FileTree, child: FileTree) \
     if child.ID in _rc(root):
         return root
     for c in _rc(root):
-        ft = find_file_parent(File_Index[c], child)
+        ft = find_file_parent(_file_index[c], child)
         if ft: return ft
     return None
 
@@ -160,6 +168,8 @@ def init(fp: Path = None) -> FileTree:
     tree_file = fp/PKL_FILE
     global _ignored  # doing this to cache the files
     _ignored = _ignored_files(fp/IGNORE_FILE)
+    global _file_index
+    _file_index.clear()
 
     try:
         with open(tree_file, 'rb') as tf:
@@ -299,7 +309,7 @@ def _create_file_tree(fp: Path) -> Optional[FileTree]:
     if fp.name in _ignored: return None
     if fp.is_dir():
         ft = FileTree(fp, None, uuid1())
-        File_Index[ft.ID] = ft
+        _file_index[ft.ID] = ft
         for f in ft.path.iterdir():
             child = _create_file_tree(f)
             if child:
@@ -308,7 +318,7 @@ def _create_file_tree(fp: Path) -> Optional[FileTree]:
         try:
             d = fp.read_text()
             ft = FileTree(fp, d, uuid1())
-            File_Index[ft.ID] = ft
+            _file_index[ft.ID] = ft
         except:
             return None
     return ft
@@ -332,7 +342,7 @@ def _rfp(ft: FileTree, dt: datetime = None) -> Path:
 
 def _add_children(child_paths: Set[UUID], dt: datetime = None):
     for c in child_paths:
-        child = File_Index.get(c)
+        child = _file_index.get(c)
         if child:
             (child.path).touch()
             child.path.write_text(_rd(child, dt))
@@ -340,7 +350,7 @@ def _add_children(child_paths: Set[UUID], dt: datetime = None):
 
 def _rmv_children(child_paths: Set[UUID]):
     for c in child_paths:
-        child = File_Index.get(c)
+        child = _file_index.get(c)
         if child: 
             try: child.path.unlink()
             except: continue
@@ -351,7 +361,7 @@ def _find_file(root: FileTree, ID: UUID) -> Optional[FileTree]:
         return root
     else:
         for c in _rc(root):
-            f = _find_file(File_Index[c], ID)
+            f = _find_file(_file_index[c], ID)
             if f:
                 return f
         return None
@@ -387,7 +397,7 @@ def _tree_to_set(node: FileTree, s = None, dt: datetime = None) -> Set[Path]:
     s = s or set()
     s.add(_rfp(node, dt))
     for c in _rc(node, dt):
-        _tree_to_set(File_Index[c], s=s, dt=dt)
+        _tree_to_set(_file_index[c], s=s, dt=dt)
     return s
 
 
@@ -397,7 +407,7 @@ def _query_in_data(ft: FileTree, query: str) \
     if query in ft.data:
         vs.add((ft.path, None))
     for m in ft.mods:
-        if m.field == "data" and query in m.value:
+        if query in _rd(ft, m.version.time):
             vs.add((_rfp(ft, m.version.time), m.version))
     return vs
 
@@ -411,7 +421,7 @@ def _rm_f_or_d(fp):
 
 def _is_subpath(path: Path, subpath: Path) -> bool:
     try:
-        subpath.resolve().relative_to(path.resolve())
+        subpath.relative_to(path)
         return True
     except ValueError:
         return False
