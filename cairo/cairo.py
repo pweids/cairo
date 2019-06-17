@@ -31,21 +31,15 @@ class Mod:
 class FileTree:
     path:     Path           # this file's name. Not using paths here
     data:     str            # the textual data in this file if Text file
-    mods:     List[Mod] = field(default_factory=list)
+    ID:       UUID
+    mods:     List[Mod] = field(default_factory=list) # diff versions of this file
     init:     datetime = field(init=False)  # when this file was initialized
-    ID:       UUID = field(init=False)
     children: List[UUID] = field(default_factory=set, init=False)
-    curr_dt:  datetime = field(init=False)
+    curr_dt:  datetime = field(init=False) # current datetime when time traveling
 
     def __post_init__(self):
-        self.ID = uuid1()
-        File_Index[self.ID] = self
-
         self.init = self.curr_dt = max(datetime.now(), _mod_time(self.path))
-
-        
-        if isinstance(self.path, str):
-            self.path = Path(self.path)
+        # a little hack because the OS makes modified time later than creation
 
     def __str__(self):
         return f"FileTree(path='{self.path}', " \
@@ -298,19 +292,21 @@ def _create_file_tree(fp: Path) -> FileTree:
     """ Factory that builds the tree """
     if fp.name in ignored: return None
     if fp.is_dir():
-        ft = FileTree(fp, None)
+        ft = FileTree(fp, None, uuid1())
+        File_Index[ft.ID] = ft
         for f in ft.path.iterdir():
             child = _create_file_tree(f)
             if child:
                 ft.children.add(child.ID)
-        return ft
     else:
         try:
             with open(fp, 'r') as f:
                 d = f.read()
-            return FileTree(fp, d)
+            ft = FileTree(fp, d, uuid1())
+            File_Index[ft.ID] = ft
         except:
             return None
+    return ft
 
 
 def _rc(ft: FileTree, dt: datetime = None) -> List[UUID]:
