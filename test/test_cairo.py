@@ -16,26 +16,26 @@ import cairo as c
 
 @pytest.fixture
 def cleandir():
-    newpath = Path(tempfile.mkdtemp())
-    os.chdir(newpath)
-    (newpath/'test_dir').mkdir()
-    (newpath/'test_dir'/'test.txt').touch()
-    (newpath/'test_dir'/'empty_dir').mkdir()
-    (newpath/'test_dir'/'sub_dir').mkdir()
-    (newpath/'test_dir'/'sub_dir'/'test2.txt').touch()
-    (newpath/'test3.txt').touch()
-    (newpath/'test4.txt').touch()
-    (newpath/'test5.txt').touch()
-    (newpath/'ignore_me.txt').touch()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        newpath = Path(temp_dir)
+        os.chdir(newpath)
+        (newpath/'test_dir').mkdir()
+        (newpath/'test_dir'/'test.txt').touch()
+        (newpath/'test_dir'/'empty_dir').mkdir()
+        (newpath/'test_dir'/'sub_dir').mkdir()
+        (newpath/'test_dir'/'sub_dir'/'test2.txt').touch()
+        (newpath/'test3.txt').touch()
+        (newpath/'test4.txt').touch()
+        (newpath/'test5.txt').touch()
+        (newpath/'ignore_me.txt').touch()
 
-    ignore = newpath/c.IGNORE_FILE
-    with open(ignore, 'w') as f:
-        f.write('ignore_me.txt')
+        ignore = newpath/c.IGNORE_FILE
+        with open(ignore, 'w') as f:
+            f.write('ignore_me.txt')
 
-    with open((newpath/'test_dir'/'test.txt'), 'w') as f:
-        f.write('test1')
-    yield
-    rmtree(newpath.absolute())
+        with open((newpath/'test_dir'/'test.txt'), 'w') as f:
+            f.write('test1')
+        yield
 
 
 def test_init_empty_dir(cleandir):
