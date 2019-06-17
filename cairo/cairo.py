@@ -220,7 +220,7 @@ def commit(root: FileTree) -> None:
             rm_file(root, fp, v)
             continue
         ft = find_file_path(root, fp)
-        data = fp.read_text()
+        data = _read_data(fp)
         if not ft:
             ft = _add_file_to_tree(root, fp, v)
             ft.init = v.time # because creation time is delayed by OS
@@ -316,7 +316,7 @@ def _create_file_tree(fp: Path) -> Optional[FileTree]:
                 ft.children.add(child.ID)
     else:
         try:
-            d = fp.read_text()
+            d = _read_data(fp)
             ft = FileTree(fp, d, uuid1())
             _file_index[ft.ID] = ft
         except:
@@ -404,6 +404,7 @@ def _tree_to_set(node: FileTree, s = None, dt: datetime = None) -> Set[Path]:
 def _query_in_data(ft: FileTree, query: str) \
         -> Set[Tuple[Path, Optional[Version]]]:
     vs = set()
+    if not isinstance(ft.data, str): return vs
     if query in ft.data:
         vs.add((ft.path, None))
     for m in ft.mods:
@@ -411,6 +412,21 @@ def _query_in_data(ft: FileTree, query: str) \
             vs.add((_rfp(ft, m.version.time), m.version))
     return vs
 
+
+def _read_data(fp: Path):
+    try:
+        data = fp.read_text()
+    except UnicodeDecodeError:
+        data = fp.read_bytes()
+    finally:
+        return data
+
+
+def _write_data(fp: Path, data):
+    if isinstance(data, str):
+        fp.write_text(data)
+    else:
+        fp.write_bytes(data)
 
 def _rm_f_or_d(fp):
     if fp.is_dir(): 

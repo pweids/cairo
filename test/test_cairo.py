@@ -7,6 +7,7 @@ from pathlib import Path
 from uuid import uuid1
 from datetime import datetime, timedelta
 import time
+from PIL import Image
 
 testdir = os.path.dirname(__file__)
 srcdir = '../cairo'
@@ -400,3 +401,32 @@ def test_search_removed_file(cleandir):
     c.rm_file(root, p)
 
     assert c.search_all(root, 'test1')
+
+
+def test_img_file(cleandir):
+    root = c.init()
+    create_test_image((155,0,0))
+
+    cf = c.changed_files(root)
+    assert (Path()/'test.png', 'new') in cf
+    c.commit(root)
+
+    time.sleep(0.2)
+    create_test_image((0,155,155))
+    cf2 = c.changed_files(root)
+    assert (Path()/'test.png', 'mod') in cf2
+
+
+def test_search_with_image(cleandir):
+  root = c.init()
+  create_test_image((155, 0, 0))
+
+  c.commit(root)
+  assert c.search_all(root, 'test1')
+
+
+def create_test_image(color):
+    img_path = Path()/'test.png'
+    image = Image.new('RGBA', size=(50, 50), color=color)
+    image.save(img_path, 'png')
+    return img_path
