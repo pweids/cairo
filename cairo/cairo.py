@@ -79,9 +79,13 @@ def ft_at_time(node: FileTree, dt: datetime) -> None:
         change_time = True
         pass # case 2
     if (_rc(node, node.curr_dt) != _rc(node, dt)):
-        # children have changed (or is FP good enough?)
+        # node has been removed
+        print(node.path, "change3")
+        curr_chld = _rc(node, node.curr_dt)
+        dt_chld = _rc(node, dt)
+        _add_children(dt_chld - curr_chld, dt)
+        _rmv_children(curr_chld - dt_chld)
         change_time = True
-        pass #case 3
     
     if change_time: node.curr_dt = dt
 
@@ -250,6 +254,8 @@ def mv_file(root: FileTree, fp: Path, parent: Path, version = None) -> FileTree:
     _save_tree(root)
 
 
+# helpers
+
 def _add_file_to_tree(root, fp, version = None):
     version = version or _mk_ver()
     parent = find_file_path(root, fp.parent)
@@ -258,8 +264,6 @@ def _add_file_to_tree(root, fp, version = None):
     pc.add(newft.ID)
     _add_new_mod(parent, 'children', pc, version)
 
-
-# helpers
 
 def _save_tree(root: FileTree) -> None:
     tree_file = _rfp(root)/PKL_FILE
@@ -318,6 +322,24 @@ def _rd(ft: FileTree, dt: datetime = None):
 def _rfp(ft: FileTree, dt: datetime = None) -> Path:
     return resolve(ft, dt).get('path', ft.path)
 
+
+def _add_children(child_paths: Set[UUID], dt: datetime = None):
+    for c in child_paths:
+        child = File_Index.get(c)
+        if child:
+            (child.path).touch()
+            with open(child.path, 'w') as f:
+                f.write(_rd(child, dt))
+
+
+def _rmv_children(child_paths: Set[UUID]):
+    for c in child_paths:
+        child = File_Index.get(c)
+        if child: 
+            try: child.path.unlink()
+            except: continue
+
+
 def _find_file(root: FileTree, ID: UUID) -> FileTree:
     if root.ID == ID:
         return root
@@ -342,8 +364,10 @@ def _mk_ver() -> Version:
 def _fp_in_tree(root: FileTree, fp: Path) -> bool:
     return find_file_path(root, fp) is not None
 
+
 def _mod_time(fp: Path) -> datetime:
     return datetime.fromtimestamp(fp.stat().st_mtime)
+
 
 def _make_sets(root: FileTree, dt: datetime = None) -> (Set[Path], Set[Path]):
     files = (set(_rfp(root, dt).glob('**/*')))
@@ -352,12 +376,14 @@ def _make_sets(root: FileTree, dt: datetime = None) -> (Set[Path], Set[Path]):
     ft_files.remove(_rfp(root, dt=dt))
     return files, ft_files
 
+
 def _tree_to_set(node: FileTree, s = None, dt: datetime = None) -> Set[Path]:
     s = s or set()
     s.add(_rfp(node, dt))
     for c in _rc(node, dt):
         _tree_to_set(File_Index[c], s=s, dt=dt)
     return s
+
 
 def _rm_f_or_d(fp):
     if fp.is_dir(): 

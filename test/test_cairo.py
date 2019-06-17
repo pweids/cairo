@@ -269,3 +269,19 @@ def test_path_change_in_time(cleandir):
     c.ft_at_time(root, after)
     assert not (Path()/'test3.txt').exists()
     assert (Path()/'test_dir'/'test3.txt').exists()
+
+
+def test_remove_change_in_time(cleandir):
+    root = c.init()
+    p = Path()/'test_dir'/'test.txt'
+    c.rm_file(root, p)
+
+    vtime = c.get_versions(root)[-1].time
+    before = vtime - timedelta(microseconds=10)
+    after = vtime + timedelta(microseconds=10)
+
+    c.ft_at_time(root, before)
+    assert p.exists()
+
+    c.ft_at_time(root, after)
+    assert not p.exists()
