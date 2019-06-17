@@ -68,8 +68,7 @@ def ft_at_time(node: FileTree, dt: datetime) -> None:
 
     if (_rd(node, node.curr_dt) != _rd(node, dt)):
         # data has changed
-        with open(_rfp(node, dt), "w") as f:
-            f.write(_rd(node, dt))
+        _rfp(node, dt).write_text(_rd(node, dt))
 
     if (_rc(node, node.curr_dt) != _rc(node, dt)):
         # node has been removed
@@ -211,8 +210,7 @@ def commit(root: FileTree) -> None:
             rm_file(root, fp, v)
             continue
         ft = find_file_path(root, fp)
-        with open(fp, 'r') as f:
-            data = f.read()
+        data = fp.read_text()
         if not ft:
             ft = _add_file_to_tree(root, fp, v)
             ft.init = v.time # because creation time is delayed by OS
@@ -308,8 +306,7 @@ def _create_file_tree(fp: Path) -> Optional[FileTree]:
                 ft.children.add(child.ID)
     else:
         try:
-            with open(fp, 'r') as f:
-                d = f.read()
+            d = fp.read_text()
             ft = FileTree(fp, d, uuid1())
             File_Index[ft.ID] = ft
         except:
@@ -338,8 +335,7 @@ def _add_children(child_paths: Set[UUID], dt: datetime = None):
         child = File_Index.get(c)
         if child:
             (child.path).touch()
-            with open(child.path, 'w') as f:
-                f.write(_rd(child, dt))
+            child.path.write_text(_rd(child, dt))
 
 
 def _rmv_children(child_paths: Set[UUID]):

@@ -350,6 +350,7 @@ def test_search_all(cleandir):
 
 def test_search_all_after_mod(cleandir):
     root = c.init()
+    time.sleep(.02)
     (Path()/'test_dir'/'test.txt').write_text('new')
     c.commit(root)
 
