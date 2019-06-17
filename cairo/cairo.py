@@ -35,12 +35,14 @@ class FileTree:
     init:     datetime = field(init=False)  # when this file was initialized
     ID:       UUID = field(init=False)
     children: List[UUID] = field(default_factory=set, init=False)
+    curr_dt:  datetime = field(init=False)
 
     def __post_init__(self):
         self.ID = uuid1()
         File_Index[self.ID] = self
 
-        self.init = max(datetime.now(), _mod_time(self.path))
+        self.init = self.curr_dt = max(datetime.now(), _mod_time(self.path))
+
         
         if isinstance(self.path, str):
             self.path = Path(self.path)
@@ -53,22 +55,38 @@ class FileTree:
 File_Index = {}
 
 
+class CairoException(BaseException): pass
+
 # Query
 
-def ft_at_time(root: FileTree, dt: datetime) -> None:
-    """ Return this FileTree's state at the specified time """
-    current = resolve(root)
-    former = resolve(root, dt)
+def ft_at_time(node: FileTree, dt: datetime) -> None:
+    """ Change the files on disk to reflect
+    this FileTree's state at the specified time 
+    """
+    if node.curr_dt >= dt and len(changed_files(node)) > 0:
+        raise CairoException("Commit your changes before time traveling")
 
-    if (current.path != former.path):
-        pass # case 1
-    if (current.data != former.data):
+    change_time = False
+    if (node.init > dt):
+        _rm_f_or_d(node.path)
+        change_time = True
+    if (_rfp(node, node.curr_dt) != _rfp(node, dt)):
+        # file has moved
+        _rfp(node, node.curr_dt).rename(_rfp(node, dt))
+        change_time = True
+    if (_rd(node, node.curr_dt) != _rd(node, dt)):
+        # data has changed
+        change_time = True
         pass # case 2
-    if (current.children != former.children):
+    if (_rc(node, node.curr_dt) != _rc(node, dt)):
+        # children have changed (or is FP good enough?)
+        change_time = True
         pass #case 3
     
-    for c in _rc(root):
-        ft_at_time(c, dt)
+    if change_time: node.curr_dt = dt
+
+    for c in _rc(node):
+        ft_at_time(File_Index[c], dt)
 
 
 def get_versions(root: FileTree) -> List[Version]:
@@ -203,7 +221,8 @@ def rm_file(root: FileTree, fp: Path, version = None) -> FileTree:
     pc = copy(_rc(parent))
     pc.remove(ft.ID)
     _add_new_mod(parent, 'children', pc, version)
-    _rm_f_or_d(fp)
+    if fp.exists(): _rm_f_or_d(fp)
+    _save_tree(root)
 
 
 def mv_file(root: FileTree, fp: Path, parent: Path, version = None) -> FileTree:
@@ -227,7 +246,9 @@ def mv_file(root: FileTree, fp: Path, parent: Path, version = None) -> FileTree:
 
     newfp = parent/fp.name
     fp.rename(newfp)
-    _add_new_mod(ft, 'filepath', newfp, v)
+    _add_new_mod(ft, 'path', newfp, v)
+    _save_tree(root)
+
 
 def _add_file_to_tree(root, fp, version = None):
     version = version or _mk_ver()
@@ -282,14 +303,20 @@ def _create_file_tree(fp: Path) -> FileTree:
             return None
 
 
-def _rc(ft: FileTree) -> List[UUID]:
+def _rc(ft: FileTree, dt: datetime = None) -> List[UUID]:
     """ Return the children of this FileTree after being fully resolved.
     We have to do this to keep the tree accurate after moves, removes, additions """
-    return resolve(ft).get('children', ft.children)
+    return resolve(ft, dt).get('children', ft.children)
 
 
-def _rfp(ft: FileTree) -> Path:
-    return resolve(ft).get('filepath', ft.path)
+def _rd(ft: FileTree, dt: datetime = None):
+    """ Return the data of this file after being fully resolved.
+    Optionally pass a dt to halt resolution at that time
+    """
+    return resolve(ft, dt).get('data', ft.data)
+
+def _rfp(ft: FileTree, dt: datetime = None) -> Path:
+    return resolve(ft, dt).get('path', ft.path)
 
 def _find_file(root: FileTree, ID: UUID) -> FileTree:
     if root.ID == ID:
@@ -305,6 +332,7 @@ def _find_file(root: FileTree, ID: UUID) -> FileTree:
 def _add_new_mod(ft: FileTree, key, val, version=None) -> None:
     v = version or _mk_ver()
     ft.mods.append(Mod(v, key, val))
+    ft.curr_dt = v.time
 
 
 def _mk_ver() -> Version:
@@ -317,26 +345,22 @@ def _fp_in_tree(root: FileTree, fp: Path) -> bool:
 def _mod_time(fp: Path) -> datetime:
     return datetime.fromtimestamp(fp.stat().st_mtime)
 
-def _make_sets(root: FileTree) -> (Set[Path], Set[Path]):
-    files = (set(_rfp(root).glob('**/*')))
+def _make_sets(root: FileTree, dt: datetime = None) -> (Set[Path], Set[Path]):
+    files = (set(_rfp(root, dt).glob('**/*')))
     files -= set(filter(lambda p: any(n in ignored for n in str(p).split('/')), files))
-    ft_files = _tree_to_set(root)
-    ft_files.remove(_rfp(root))
+    ft_files = _tree_to_set(root, dt)
+    ft_files.remove(_rfp(root, dt=dt))
     return files, ft_files
 
-def _tree_to_set(node: FileTree, s = None) -> Set[Path]:
+def _tree_to_set(node: FileTree, s = None, dt: datetime = None) -> Set[Path]:
     s = s or set()
-    s.add(_rfp(node))
-    for c in _rc(node):
-        _tree_to_set(File_Index[c], s)
+    s.add(_rfp(node, dt))
+    for c in _rc(node, dt):
+        _tree_to_set(File_Index[c], s=s, dt=dt)
     return s
 
 def _rm_f_or_d(fp):
-    print(fp)
-    try:
-        if fp.is_dir(): 
-            rmtree(fp)
-        else:
-            fp.unlink()
-    except:
-        pass
+    if fp.is_dir(): 
+        rmtree(fp)
+    else:
+        fp.unlink()

@@ -107,7 +107,7 @@ def test_mv_file(cleandir):
     assert not f.exists()
     assert newfp.exists()
     ft = c.find_file(root, 'test.txt')
-    assert c.resolve(ft)['filepath'] == newfp
+    assert c.resolve(ft)['path'] == newfp
 
     parent = c.find_file_path(root, p)
     assert parent.children != c.resolve(parent)['children']
@@ -245,16 +245,27 @@ def test_commit(cleandir):
     assert len(cf2) == 0
 
 
-def dont_test_path_change_in_time(cleandir):
+def test_uncomitted_changes_raise_exception(cleandir):
+    root = c.init()
+    
+    p = Path()/'new_file.txt'
+    p.touch()
+
+    pytest.raises(c.CairoException, c.ft_at_time, root, root.init)
+
+
+def test_path_change_in_time(cleandir):
     root = c.init()
     c.mv_file(root, Path()/'test3.txt', Path()/'test_dir')
 
     vtime = c.get_versions(root)[-1].time
-    before = vtime - timedelta(microseconds=1)
-    after = vtime + timedelta(microseconds=2)
+    before = vtime - timedelta(microseconds=10)
+    after = vtime + timedelta(microseconds=10)
     
-    ft_before = c.ft_at_time(root, before)
-    ft_after  = c.ft_at_time(root, after)
+    c.ft_at_time(root, before)
+    assert (Path()/'test3.txt').exists()
+    assert not (Path()/'test_dir'/'test3.txt').exists()
 
-    assert c.find_file(ft_before, Path()/'test3.txt')
-    assert not c.find_file(ft_after, Path()/'test3.txt')
+    c.ft_at_time(root, after)
+    assert not (Path()/'test3.txt').exists()
+    assert (Path()/'test_dir'/'test3.txt').exists()
