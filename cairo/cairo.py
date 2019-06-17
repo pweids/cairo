@@ -84,6 +84,18 @@ def ft_at_time(node: FileTree, dt: datetime) -> None:
         ft_at_time(File_Index[c], dt)
 
 
+def search_all(root: FileTree, query: str) \
+        -> Set[Tuple[Path, Optional[Version]]]:
+    vs = set()
+    for _, ft in File_Index.items():
+        if _rfp(ft).is_dir() \
+            or not _is_subpath(root.path, ft.path): continue
+        vs = vs.union(_query_in_data(ft, query))
+    return vs
+
+
+
+
 def get_versions(root: FileTree) -> List[Version]:
     """ Returns all of the versions in the FileTree """
     def go(ft, vs):
@@ -141,10 +153,11 @@ def resolve(ft: FileTree, stop_time: datetime = None) -> dict:
 
 # Setup
 
-def init(fp: Path = Path()) -> FileTree:
+def init(fp: Path = None) -> FileTree:
     """ Initialize Cairo at the given path (or the current working directoy)
     if not supplied. Looks for a History, and if not there, creates one.
     """
+    fp = fp or Path()
     tree_file = fp/PKL_FILE
     global _ignored  # doing this to cache the files
     _ignored = _ignored_files(fp/IGNORE_FILE)
@@ -382,8 +395,27 @@ def _tree_to_set(node: FileTree, s = None, dt: datetime = None) -> Set[Path]:
     return s
 
 
+def _query_in_data(ft: FileTree, query: str) \
+        -> Set[Tuple[Path, Optional[Version]]]:
+    vs = set()
+    if query in ft.data:
+        vs.add((ft.path, None))
+    for m in ft.mods:
+        if m.field == "data" and query in m.value:
+            vs.add((_rfp(ft, m.version.time), m.version))
+    return vs
+
+
 def _rm_f_or_d(fp):
     if fp.is_dir(): 
         rmtree(fp)
     else:
         fp.unlink()
+
+
+def _is_subpath(path: Path, subpath: Path) -> bool:
+    try:
+        subpath.resolve().relative_to(path.resolve())
+        return True
+    except ValueError:
+        return False

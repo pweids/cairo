@@ -341,3 +341,17 @@ def test_move_and_data_change_in_time(cleandir):
     c.ft_at_time(root, after)
     data = dest.read_text()
     assert data == "change"
+
+
+def test_search_all(cleandir):
+    root = c.init()
+    assert c.search_all(root, "test1")
+
+
+def test_search_all_after_mod(cleandir):
+    root = c.init()
+    (Path()/'test_dir'/'test.txt').write_text('new')
+    c.commit(root)
+
+    assert c.search_all(root, "test1")
+    assert c.search_all(root, "new")
