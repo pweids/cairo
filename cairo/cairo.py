@@ -67,15 +67,19 @@ def ft_at_time(node: FileTree, dt: datetime) -> None:
         raise CairoException("Commit your changes before time traveling")
 
     change_time = False
-    if (node.init > dt):
+    if (node.init > dt and node.path.exists()):
         _rm_f_or_d(node.path)
         change_time = True
+        print(node.path, "change0")
     if (_rfp(node, node.curr_dt) != _rfp(node, dt)):
         # file has moved
+        print(node.path, "change1")
+
         _rfp(node, node.curr_dt).rename(_rfp(node, dt))
         change_time = True
     if (_rd(node, node.curr_dt) != _rd(node, dt)):
         # data has changed
+        print(node.path, "change2")
         change_time = True
         pass # case 2
     if (_rc(node, node.curr_dt) != _rc(node, dt)):
@@ -208,7 +212,8 @@ def commit(root: FileTree) -> None:
         with open(fp, 'r') as f:
             data = f.read()
         if not ft:
-            _add_file_to_tree(root, fp, v)
+            ft = _add_file_to_tree(root, fp, v)
+            ft.init = v.time # because creation time is delayed by OS
         else:
             _add_new_mod(ft, 'data', data, v)
     _save_tree(root)
@@ -256,13 +261,14 @@ def mv_file(root: FileTree, fp: Path, parent: Path, version = None) -> FileTree:
 
 # helpers
 
-def _add_file_to_tree(root, fp, version = None):
+def _add_file_to_tree(root, fp, version = None) -> FileTree:
     version = version or _mk_ver()
     parent = find_file_path(root, fp.parent)
     newft = _create_file_tree(fp)
     pc = copy(parent.children)
     pc.add(newft.ID)
     _add_new_mod(parent, 'children', pc, version)
+    return newft
 
 
 def _save_tree(root: FileTree) -> None:

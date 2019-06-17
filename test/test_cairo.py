@@ -285,3 +285,22 @@ def test_remove_change_in_time(cleandir):
 
     c.ft_at_time(root, after)
     assert not p.exists()
+
+
+def test_add_file_change_in_time(cleandir):
+    root = c.init()
+    p = Path()/'new_file.txt'
+    p.touch()
+
+    c.commit(root)
+
+    vs = c.get_versions(root)
+    vtime = vs[-1].time
+    before = vtime - timedelta(microseconds=10)
+    after = vtime + timedelta(microseconds=10)
+
+    c.ft_at_time(root, before)
+    assert not p.exists()
+
+    c.ft_at_time(root, after)
+    assert p.exists()
