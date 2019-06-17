@@ -10,7 +10,7 @@ from shutil import rmtree
 
 IGNORE_FILE = 'ignore.txt'
 PKL_FILE = '.cairo.pkl'
-ignored = [IGNORE_FILE, PKL_FILE]
+_ignored = [IGNORE_FILE, PKL_FILE]
 
 
 # Data Structures
@@ -58,22 +58,18 @@ def ft_at_time(node: FileTree, dt: datetime) -> None:
     if node.curr_dt >= dt and len(changed_files(node)) > 0:
         raise CairoException("Commit your changes before time traveling")
 
-    change_time = False
     if (node.init > dt and node.path.exists()):
         # node was created after dt
         _rm_f_or_d(node.path)
-        change_time = True
 
     if (_rfp(node, node.curr_dt) != _rfp(node, dt)):
         # file has moved
         _rfp(node, node.curr_dt).rename(_rfp(node, dt))
-        change_time = True
 
     if (_rd(node, node.curr_dt) != _rd(node, dt)):
         # data has changed
         with open(_rfp(node, dt), 'w') as f:
             f.write(_rd(node, dt))
-        change_time = True
 
     if (_rc(node, node.curr_dt) != _rc(node, dt)):
         # node has been removed
@@ -81,9 +77,8 @@ def ft_at_time(node: FileTree, dt: datetime) -> None:
         dt_chld = _rc(node, dt)
         _add_children(dt_chld - curr_chld, dt)
         _rmv_children(curr_chld - dt_chld)
-        change_time = True
     
-    if change_time: node.curr_dt = dt
+    node.curr_dt = dt
 
     for c in _rc(node):
         ft_at_time(File_Index[c], dt)
@@ -150,8 +145,8 @@ def init(fp: Path = Path()) -> FileTree:
     if not supplied. Looks for a History, and if not there, creates one.
     """
     tree_file = fp/PKL_FILE
-    global ignored  # doing this to cache the files
-    ignored = _ignored_files(fp/IGNORE_FILE)
+    global _ignored  # doing this to cache the files
+    _ignored = _ignored_files(fp/IGNORE_FILE)
 
     try:
         with open(tree_file, 'rb') as tf:
@@ -169,7 +164,7 @@ def changed_files(root: FileTree) -> List[Path]:
     changed = []
 
     def is_new(fp):
-        if fp.name in ignored: return False
+        if fp.name in _ignored: return False
         ft = find_file_path(root, fp)
         return not ft
 
@@ -279,7 +274,7 @@ def _last_changed(root: FileTree, fp: Path) -> datetime:
 
 def _ignored_files(fp: Path) -> List[str]:
     """ Return a list of all file names listed in the fp ignore file """
-    ns = ignored
+    ns = _ignored
     if fp.exists() and fp.is_file():
         with open(fp, 'r') as f:
             ns += f.readlines()
@@ -288,7 +283,7 @@ def _ignored_files(fp: Path) -> List[str]:
 
 def _create_file_tree(fp: Path) -> FileTree:
     """ Factory that builds the tree """
-    if fp.name in ignored: return None
+    if fp.name in _ignored: return None
     if fp.is_dir():
         ft = FileTree(fp, None, uuid1())
         File_Index[ft.ID] = ft
@@ -371,7 +366,7 @@ def _mod_time(fp: Path) -> datetime:
 
 def _make_sets(root: FileTree, dt: datetime = None) -> (Set[Path], Set[Path]):
     files = (set(_rfp(root, dt).glob('**/*')))
-    files -= set(filter(lambda p: any(n in ignored for n in str(p).split('/')), files))
+    files -= set(filter(lambda p: any(n in _ignored for n in str(p).split('/')), files))
     ft_files = _tree_to_set(root, dt)
     ft_files.remove(_rfp(root, dt=dt))
     return files, ft_files
