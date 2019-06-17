@@ -14,29 +14,23 @@ sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 import cairo as c
 
 
-@pytest.fixture
-def cleandir():
-    with tempfile.TemporaryDirectory() as temp_dir:
-        newpath = Path(temp_dir)
-        os.chdir(newpath)
-        (newpath/'test_dir').mkdir()
-        (newpath/'test_dir'/'test.txt').touch()
-        (newpath/'test_dir'/'empty_dir').mkdir()
-        (newpath/'test_dir'/'sub_dir').mkdir()
-        (newpath/'test_dir'/'sub_dir'/'test2.txt').touch()
-        (newpath/'test3.txt').touch()
-        (newpath/'test4.txt').touch()
-        (newpath/'test5.txt').touch()
-        (newpath/'ignore_me.txt').touch()
+@pytest.fixture(scope="function")
+def cleandir(tmp_path):
+    os.chdir(tmp_path)
+    (tmp_path/'test_dir').mkdir()
+    (tmp_path/'test_dir'/'test.txt').touch()
+    (tmp_path/'test_dir'/'empty_dir').mkdir()
+    (tmp_path/'test_dir'/'sub_dir').mkdir()
+    (tmp_path/'test_dir'/'sub_dir'/'test2.txt').touch()
+    (tmp_path/'test3.txt').touch()
+    (tmp_path/'test4.txt').touch()
+    (tmp_path/'test5.txt').touch()
+    (tmp_path/'ignore_me.txt').touch()
 
-        ignore = newpath/c.IGNORE_FILE
-        with open(ignore, 'w') as f:
-            f.write('ignore_me.txt')
+    ignore = tmp_path/c.IGNORE_FILE
+    ignore.write_text('ignore_me.txt')
 
-        with open((newpath/'test_dir'/'test.txt'), 'w') as f:
-            f.write('test1')
-        yield
-
+    (tmp_path/'test_dir'/'test.txt').write_text('test1')
 
 def test_init_empty_dir(cleandir):
     curp = Path()
@@ -124,8 +118,7 @@ def test_changed(cleandir):
 
     p = Path()/'test_dir'/'test.txt'
     time.sleep(.02)
-    with open(p, 'w') as f:
-        f.write('change')
+    p.write_text('change')
 
     cf = c.changed_files(root)
     assert len(cf) == 1
@@ -135,7 +128,7 @@ def test_new_file(cleandir):
     assert not list(Path().glob('.cairo.pkl'))
     root = c.init()
 
-    p = Path()/'new_file.txt'
+    p = Path()/'test_dir'/'new_file.txt'
     p.touch()
 
     cf = c.changed_files(root)
@@ -202,8 +195,7 @@ def test_commit(cleandir):
 
     # changed file
     p2 = Path()/'test_dir'/'test.txt'
-    with open(p2, 'w') as f:
-        f.write('change')
+    p2.write_text('change')
 
     # moved file
     f = Path()
@@ -233,7 +225,6 @@ def test_commit(cleandir):
     p5.unlink()
 
     v1 = c.get_versions(root)
-    cf1 = c.changed_files(root)
     
     c.commit(root)
 
@@ -308,12 +299,10 @@ def test_add_file_change_in_time(cleandir):
 def test_data_change_in_time(cleandir):
     root = c.init()
     p = Path()/'test_dir'/'test.txt'
-    with open(p, 'r') as f:
-        old_data = f.read()
+    old_data = p.read_text()
 
     time.sleep(.02)
-    with open(p, 'w') as f:
-        f.write('change')
+    p.write_text('change')
     
     c.commit(root)
     vtime = c.get_versions(root)[-1].time
@@ -321,13 +310,11 @@ def test_data_change_in_time(cleandir):
     after = vtime + timedelta(microseconds=10)
 
     c.ft_at_time(root, before)
-    with open(p, 'r') as f:
-        data = f.read()
+    data = p.read_text()
     assert data == old_data
 
     c.ft_at_time(root, after)
-    with open(p, 'r') as f:
-        data = f.read()
+    data = p.read_text()
     assert data == "change"
 
 
@@ -337,12 +324,10 @@ def test_move_and_data_change_in_time(cleandir):
     dest = Path()/'test_dir'/'empty_dir'/'test.txt'
     src.rename(dest)
     
-    with open(dest, 'r') as f:
-        old_data = f.read()
+    old_data = dest.read_text()
 
     time.sleep(.02)
-    with open(dest, 'w') as f:
-        f.write('change')
+    dest.write_text('change')
 
     c.commit(root)
     vtime = c.get_versions(root)[-1].time
@@ -350,11 +335,9 @@ def test_move_and_data_change_in_time(cleandir):
     after = vtime + timedelta(microseconds=10)
 
     c.ft_at_time(root, before)
-    with open(src, 'r') as f:
-        data = f.read()
+    data = src.read_text()
     assert data == old_data
 
     c.ft_at_time(root, after)
-    with open(dest, 'r') as f:
-        data = f.read()
+    data = dest.read_text()
     assert data == "change"

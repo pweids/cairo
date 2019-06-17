@@ -1,4 +1,4 @@
-from typing import List, Dict, Set
+from typing import List, Dict, Set, Tuple, Optional
 from dataclasses import dataclass, field
 from collections import namedtuple
 from datetime import datetime
@@ -68,7 +68,7 @@ def ft_at_time(node: FileTree, dt: datetime) -> None:
 
     if (_rd(node, node.curr_dt) != _rd(node, dt)):
         # data has changed
-        with open(_rfp(node, dt), 'w') as f:
+        with open(_rfp(node, dt), "w") as f:
             f.write(_rd(node, dt))
 
     if (_rc(node, node.curr_dt) != _rc(node, dt)):
@@ -95,7 +95,7 @@ def get_versions(root: FileTree) -> List[Version]:
     return sorted(vs, key=lambda v: v.time, reverse=True)
 
 
-def find_file(ft: FileTree, name: str) -> FileTree:
+def find_file(ft: FileTree, name: str) -> Optional[FileTree]:
     """ Returns the file ID of the named file in root. Finds
     the most shallow instance
     """
@@ -109,7 +109,7 @@ def find_file(ft: FileTree, name: str) -> FileTree:
         return None
 
 
-def find_file_path(ft: FileTree, fp: Path) -> FileTree:
+def find_file_path(ft: FileTree, fp: Path) -> Optional[FileTree]:
     if _rfp(ft) == fp:
         return ft
     else:
@@ -120,7 +120,8 @@ def find_file_path(ft: FileTree, fp: Path) -> FileTree:
         return None
 
 
-def find_file_parent(root: FileTree, child: FileTree) -> FileTree:
+def find_file_parent(root: FileTree, child: FileTree) \
+        -> Optional[FileTree]:
     if child.ID in _rc(root):
         return root
     for c in _rc(root):
@@ -159,7 +160,7 @@ def init(fp: Path = Path()) -> FileTree:
 
 # File Changes
 
-def changed_files(root: FileTree) -> List[Path]:
+def changed_files(root: FileTree) -> List[Tuple[Path, str]]:
     """ List all files changed since the most recent version """
     changed = []
 
@@ -169,6 +170,7 @@ def changed_files(root: FileTree) -> List[Path]:
         return not ft
 
     def is_modified(fp):
+        if fp.is_dir(): return False # for Windows
         mtime = _mod_time(fp)
         time = _last_changed(root, fp)
         
@@ -208,7 +210,7 @@ def commit(root: FileTree) -> None:
 
 # Commands
 
-def rm_file(root: FileTree, fp: Path, version = None) -> FileTree:
+def rm_file(root: FileTree, fp: Path, version = None) -> None:
     """ Remove the file from the FileTree """
     ft = find_file_path(root, fp)
     if not ft: return
@@ -221,7 +223,7 @@ def rm_file(root: FileTree, fp: Path, version = None) -> FileTree:
     _save_tree(root)
 
 
-def mv_file(root: FileTree, fp: Path, parent: Path, version = None) -> FileTree:
+def mv_file(root: FileTree, fp: Path, parent: Path, version = None) -> None:
     """ Move "file" to "parent" directory """
     assert parent.is_dir()
     ft = find_file_path(root, fp)
@@ -281,7 +283,7 @@ def _ignored_files(fp: Path) -> List[str]:
     return ns
 
 
-def _create_file_tree(fp: Path) -> FileTree:
+def _create_file_tree(fp: Path) -> Optional[FileTree]:
     """ Factory that builds the tree """
     if fp.name in _ignored: return None
     if fp.is_dir():
@@ -335,7 +337,7 @@ def _rmv_children(child_paths: Set[UUID]):
             except: continue
 
 
-def _find_file(root: FileTree, ID: UUID) -> FileTree:
+def _find_file(root: FileTree, ID: UUID) -> Optional[FileTree]:
     if root.ID == ID:
         return root
     else:
