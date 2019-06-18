@@ -37,8 +37,12 @@ def test_init_empty_dir(cleandir):
     curp = Path()
     assert not (curp/c.PKL_FILE).exists()
     root = c.init(Path())
-    assert isinstance(root, c.FileTree)
+    assert isinstance(root, c.FileObject)
     assert (curp/c.PKL_FILE).exists()
+
+
+def test_init_check(cleandir):
+  assert not c.is_initialized()
 
 
 def test_find_files(cleandir):

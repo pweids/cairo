@@ -8,9 +8,12 @@ import pickle
 from copy import copy
 from shutil import rmtree
 
+# global vars
+
 IGNORE_FILE = 'ignore.txt'
 PKL_FILE = '.cairo.pkl'
 _ignored = [IGNORE_FILE, PKL_FILE]
+_file_index = {}
 
 
 # Data Structures
@@ -20,13 +23,19 @@ Version = namedtuple("Version", "verid time")
 
 @dataclass
 class Mod:
+    """ Data structure for modifications to file objects.
+    Fields
+        version: Version object
+        field:   object field that was modified
+        value:   field's value at this version
+    """
     version: Version  # the GUID of the version
     field:   str     # the field from the TimeFile
     value:   str     # the value at this version num
 
 
 @dataclass
-class FileTree:
+class FileObject:
     path:     Path           # this file's name. Not using paths here
     data:     str            # the textual data in this file if Text file
     ID:       UUID
@@ -40,20 +49,19 @@ class FileTree:
         # a little hack because the OS makes modified time later than creation
 
     def __str__(self):
-        return f"FileTree(path='{self.path}', " \
+        return f"FileObject(path='{self.path}', " \
              "id='{self.ID}')"
 
 
-_file_index = {}
-
-
-class CairoException(BaseException): pass
+class CairoException(BaseException): 
+    """ Cairo specific exceptions """
+    pass
 
 # Query
 
-def ft_at_time(node: FileTree, dt: datetime) -> None:
+def ft_at_time(node: FileObject, dt: datetime) -> None:
     """ Change the files on disk to reflect
-    this FileTree's state at the specified time 
+    this FileObject's state at the specified time 
     """
     if node.curr_dt >= dt and len(changed_files(node)) > 0:
         raise CairoException("Commit your changes before time traveling")
@@ -83,7 +91,7 @@ def ft_at_time(node: FileTree, dt: datetime) -> None:
         ft_at_time(_file_index[c], dt)
 
 
-def search_all(root: FileTree, query: str) \
+def search_all(root: FileObject, query: str) \
         -> Set[Tuple[Path, Optional[Version]]]:
     """ Returns a set of paths/versions for all files in which
     this query appeared. If a file was moved but the data was the same,
@@ -97,14 +105,14 @@ def search_all(root: FileTree, query: str) \
     return vs
 
 
-def search_file(root: FileTree, fp: Path, query: str) \
+def search_file(root: FileObject, fp: Path, query: str) \
         -> Set[Tuple[Path, Optional[Version]]]:
     all_vs = search_all(root, query)
     return set(filter(lambda v: v[0] == fp, all_vs))
 
 
-def get_versions(root: FileTree) -> List[Version]:
-    """ Returns all of the versions in the FileTree """
+def get_versions(root: FileObject) -> List[Version]:
+    """ Returns all of the versions in the FileObject """
     def go(ft, vs):
         vs = vs.union(set([m.version for m in ft.mods]))
         for c in _rc(ft):
@@ -114,7 +122,7 @@ def get_versions(root: FileTree) -> List[Version]:
     return sorted(vs, key=lambda v: v.time, reverse=True)
 
 
-def find_file(ft: FileTree, name: str) -> Optional[FileTree]:
+def find_file(ft: FileObject, name: str) -> Optional[FileObject]:
     """ Returns the file ID of the named file in root. Finds
     the most shallow instance
     """
@@ -128,7 +136,7 @@ def find_file(ft: FileTree, name: str) -> Optional[FileTree]:
         return None
 
 
-def find_file_path(ft: FileTree, fp: Path) -> Optional[FileTree]:
+def find_file_path(ft: FileObject, fp: Path) -> Optional[FileObject]:
     if _rfp(ft) == fp:
         return ft
     else:
@@ -139,8 +147,8 @@ def find_file_path(ft: FileTree, fp: Path) -> Optional[FileTree]:
         return None
 
 
-def find_file_parent(root: FileTree, child: FileTree) \
-        -> Optional[FileTree]:
+def find_file_parent(root: FileObject, child: FileObject) \
+        -> Optional[FileObject]:
     if child.ID in _rc(root):
         return root
     for c in _rc(root):
@@ -149,7 +157,7 @@ def find_file_parent(root: FileTree, child: FileTree) \
     return None
 
 
-def resolve(ft: FileTree, stop_time: datetime = None) -> FileTree:
+def resolve(ft: FileObject, stop_time: datetime = None) -> FileObject:
     """ Return the contents of the file after all modifications """
     rft = copy(ft)
     for m in ft.mods:
@@ -160,10 +168,11 @@ def resolve(ft: FileTree, stop_time: datetime = None) -> FileTree:
 
 # Setup
 
-def init(fp: Path = None) -> FileTree:
+def init(fp: Path = None) -> FileObject:
     """ Initialize Cairo at the given path (or the current working directoy)
     if not supplied. Looks for previous init history, and if not there, creates one.
     """
+    if isinstance(fp, str): fp = Path(fp)
     fp = fp or Path()
     tree_file = fp/PKL_FILE
     global _ignored  # doing this to cache the files
@@ -180,9 +189,17 @@ def init(fp: Path = None) -> FileTree:
         return ft
 
 
+def is_initialized(fp: Path = None) -> bool:
+    """ Return if the filepath has a gate """
+    if isinstance(fp, str): fp = Path(fp)
+    fp = fp or Path()
+    tree_file = fp/PKL_FILE
+    return tree_file.exists()
+
+
 # File Changes
 
-def changed_files(root: FileTree) -> List[Tuple[Path, str]]:
+def changed_files(root: FileObject) -> List[Tuple[Path, str]]:
     """ List all files changed since the most recent version.
     Has no side effects. """
     changed = []
@@ -213,7 +230,7 @@ def changed_files(root: FileTree) -> List[Tuple[Path, str]]:
     return changed
 
 
-def commit(root: FileTree) -> None:
+def commit(root: FileObject) -> None:
     """ Commit all data modifcations in the local directory to the data structure.
     Does not affect the local directory.  """
     v = _mk_ver()
@@ -233,8 +250,8 @@ def commit(root: FileTree) -> None:
 
 # Commands
 
-def rm_file(root: FileTree, fp: Path, version = None) -> None:
-    """ Remove the file from the FileTree and from disk. """
+def rm_file(root: FileObject, fp: Path, version = None) -> None:
+    """ Remove the file from the FileObject and from disk. """
     ft = find_file_path(root, fp)
     if not ft: return
     parent = find_file_parent(root, ft)
@@ -246,8 +263,8 @@ def rm_file(root: FileTree, fp: Path, version = None) -> None:
     _save_tree(root)
 
 
-def mv_file(root: FileTree, fp: Path, parent: Path, version = None) -> None:
-    """ Move "file" to "parent" directory in FileTree and disk. This
+def mv_file(root: FileObject, fp: Path, parent: Path, version = None) -> None:
+    """ Move "file" to "parent" directory in FileObject and disk. This
     is preferable to moving the file on its own or cairo will think one
     file was deleted while another created. """
     assert parent.is_dir()
@@ -271,6 +288,9 @@ def mv_file(root: FileTree, fp: Path, parent: Path, version = None) -> None:
     _add_new_mod(ft, 'path', newfp, v)
     _save_tree(root)
 
+
+# helpers
+
 def _mv_child_of_parents(child, parent_src, parent_dest, version):
     p1c = copy(_rc(parent_src))
     p1c.remove(child.ID)
@@ -280,9 +300,7 @@ def _mv_child_of_parents(child, parent_src, parent_dest, version):
     _add_new_mod(parent_dest, 'children', p2c, version)
 
 
-# helpers
-
-def _add_file_to_tree(root, fp, version = None) -> FileTree:
+def _add_file_to_tree(root, fp, version = None) -> FileObject:
     version = version or _mk_ver()
     parent = find_file_path(root, fp.parent)
     newft = _create_file_tree(fp)
@@ -292,13 +310,13 @@ def _add_file_to_tree(root, fp, version = None) -> FileTree:
     return newft
 
 
-def _save_tree(root: FileTree) -> None:
+def _save_tree(root: FileObject) -> None:
     tree_file = _rfp(root)/PKL_FILE
     with open(tree_file, 'wb') as tf:
         pickle.dump(root, tf)
 
 
-def _last_changed(root: FileTree, fp: Path) -> datetime:
+def _last_changed(root: FileObject, fp: Path) -> datetime:
     f = find_file_path(root, fp)
     if f:
         return f.mods[-1].version.time if f.mods else f.init
@@ -315,11 +333,11 @@ def _ignored_files(fp: Path) -> List[str]:
     return ns
 
 
-def _create_file_tree(fp: Path) -> Optional[FileTree]:
+def _create_file_tree(fp: Path) -> Optional[FileObject]:
     """ Factory that builds the tree """
     if fp.name in _ignored: return None
     if fp.is_dir():
-        ft = FileTree(fp, None, uuid1())
+        ft = FileObject(fp, None, uuid1())
         _file_index[ft.ID] = ft
         for f in ft.path.iterdir():
             child = _create_file_tree(f)
@@ -328,26 +346,26 @@ def _create_file_tree(fp: Path) -> Optional[FileTree]:
     else:
         try:
             d = _read_data(fp)
-            ft = FileTree(fp, d, uuid1())
+            ft = FileObject(fp, d, uuid1())
             _file_index[ft.ID] = ft
         except:
             return None
     return ft
 
 
-def _rc(ft: FileTree, dt: datetime = None) -> List[UUID]:
-    """ Return the children of this FileTree after being fully resolved.
+def _rc(ft: FileObject, dt: datetime = None) -> List[UUID]:
+    """ Return the children of this FileObject after being fully resolved.
     We have to do this to keep the tree accurate after moves, removes, additions """
     return resolve(ft, dt).children
 
 
-def _rd(ft: FileTree, dt: datetime = None):
+def _rd(ft: FileObject, dt: datetime = None):
     """ Return the data of this file after being fully resolved.
     Optionally pass a dt to halt resolution at that time
     """
     return resolve(ft, dt).data
 
-def _rfp(ft: FileTree, dt: datetime = None) -> Path:
+def _rfp(ft: FileObject, dt: datetime = None) -> Path:
     return resolve(ft, dt).path
 
 
@@ -367,7 +385,7 @@ def _rmv_children(child_paths: Set[UUID]):
             except: continue
 
 
-def _find_file(root: FileTree, ID: UUID) -> Optional[FileTree]:
+def _find_file(root: FileObject, ID: UUID) -> Optional[FileObject]:
     if root.ID == ID:
         return root
     else:
@@ -378,7 +396,7 @@ def _find_file(root: FileTree, ID: UUID) -> Optional[FileTree]:
         return None
 
 
-def _add_new_mod(ft: FileTree, key, val, version=None) -> None:
+def _add_new_mod(ft: FileObject, key, val, version=None) -> None:
     v = version or _mk_ver()
     ft.mods.append(Mod(v, key, val))
     ft.curr_dt = v.time
@@ -388,7 +406,7 @@ def _mk_ver() -> Version:
     return Version(uuid1(), datetime.now())
 
 
-def _fp_in_tree(root: FileTree, fp: Path) -> bool:
+def _fp_in_tree(root: FileObject, fp: Path) -> bool:
     return find_file_path(root, fp) is not None
 
 
@@ -396,7 +414,7 @@ def _mod_time(fp: Path) -> datetime:
     return datetime.fromtimestamp(fp.stat().st_mtime)
 
 
-def _make_sets(root: FileTree, dt: datetime = None) -> (Set[Path], Set[Path]):
+def _make_sets(root: FileObject, dt: datetime = None) -> (Set[Path], Set[Path]):
     files = (set(_rfp(root, dt).glob('**/*')))
     files -= set(filter(lambda p: any(n in _ignored for n in str(p).split('/')), files))
     ft_files = _tree_to_set(root, dt)
@@ -404,7 +422,7 @@ def _make_sets(root: FileTree, dt: datetime = None) -> (Set[Path], Set[Path]):
     return files, ft_files
 
 
-def _tree_to_set(node: FileTree, s = None, dt: datetime = None) -> Set[Path]:
+def _tree_to_set(node: FileObject, s = None, dt: datetime = None) -> Set[Path]:
     s = s or set()
     s.add(_rfp(node, dt))
     for c in _rc(node, dt):
@@ -412,7 +430,7 @@ def _tree_to_set(node: FileTree, s = None, dt: datetime = None) -> Set[Path]:
     return s
 
 
-def _query_in_data(ft: FileTree, query: str) \
+def _query_in_data(ft: FileObject, query: str) \
         -> Set[Tuple[Path, Optional[Version]]]:
     vs = set()
     if not isinstance(ft.data, str): return vs

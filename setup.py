@@ -5,7 +5,8 @@ setup(
   author = 'pweids',
   version = '0.1.0',
   install_requires = [
-    'Click==7.0'
+    'Click==7.0',
+    'python=dateutil'
   ],
   packages = [
     'cairo',
