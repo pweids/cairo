@@ -149,20 +149,20 @@ def find_file_parent(root: FileTree, child: FileTree) \
     return None
 
 
-def resolve(ft: FileTree, stop_time: datetime = None) -> dict:
+def resolve(ft: FileTree, stop_time: datetime = None) -> FileTree:
     """ Return the contents of the file after all modifications """
-    data = {}
+    rft = copy(ft)
     for m in ft.mods:
         if not stop_time or m.version.time <= stop_time:
-            data[m.field] = m.value
-    return data
+            setattr(rft, m.field, m.value)
+    return rft
 
 
 # Setup
 
 def init(fp: Path = None) -> FileTree:
     """ Initialize Cairo at the given path (or the current working directoy)
-    if not supplied. Looks for a History, and if not there, creates one.
+    if not supplied. Looks for previous init history, and if not there, creates one.
     """
     fp = fp or Path()
     tree_file = fp/PKL_FILE
@@ -183,7 +183,8 @@ def init(fp: Path = None) -> FileTree:
 # File Changes
 
 def changed_files(root: FileTree) -> List[Tuple[Path, str]]:
-    """ List all files changed since the most recent version """
+    """ List all files changed since the most recent version.
+    Has no side effects. """
     changed = []
 
     def is_new(fp):
@@ -327,17 +328,17 @@ def _create_file_tree(fp: Path) -> Optional[FileTree]:
 def _rc(ft: FileTree, dt: datetime = None) -> List[UUID]:
     """ Return the children of this FileTree after being fully resolved.
     We have to do this to keep the tree accurate after moves, removes, additions """
-    return resolve(ft, dt).get('children', ft.children)
+    return resolve(ft, dt).children
 
 
 def _rd(ft: FileTree, dt: datetime = None):
     """ Return the data of this file after being fully resolved.
     Optionally pass a dt to halt resolution at that time
     """
-    return resolve(ft, dt).get('data', ft.data)
+    return resolve(ft, dt).data
 
 def _rfp(ft: FileTree, dt: datetime = None) -> Path:
-    return resolve(ft, dt).get('path', ft.path)
+    return resolve(ft, dt).path
 
 
 def _add_children(child_paths: Set[UUID], dt: datetime = None):
