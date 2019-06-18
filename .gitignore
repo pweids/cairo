@@ -4,3 +4,5 @@ __pycache__/
 .cairo.pkl
 /venv/
 .idea
+cairo.egg-info/
+install.sh

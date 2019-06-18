@@ -214,7 +214,8 @@ def changed_files(root: FileTree) -> List[Tuple[Path, str]]:
 
 
 def commit(root: FileTree) -> None:
-    """ Commit all data modifcations in the local directory to the data structure """
+    """ Commit all data modifcations in the local directory to the data structure.
+    Does not affect the local directory.  """
     v = _mk_ver()
     for fp, chng in changed_files(root):
         if chng == 'rmv': 
@@ -233,7 +234,7 @@ def commit(root: FileTree) -> None:
 # Commands
 
 def rm_file(root: FileTree, fp: Path, version = None) -> None:
-    """ Remove the file from the FileTree """
+    """ Remove the file from the FileTree and from disk. """
     ft = find_file_path(root, fp)
     if not ft: return
     parent = find_file_parent(root, ft)
@@ -246,7 +247,9 @@ def rm_file(root: FileTree, fp: Path, version = None) -> None:
 
 
 def mv_file(root: FileTree, fp: Path, parent: Path, version = None) -> None:
-    """ Move "file" to "parent" directory """
+    """ Move "file" to "parent" directory in FileTree and disk. This
+    is preferable to moving the file on its own or cairo will think one
+    file was deleted while another created. """
     assert parent.is_dir()
     ft = find_file_path(root, fp)
     p1 = find_file_path(root, fp.parent)
@@ -257,17 +260,24 @@ def mv_file(root: FileTree, fp: Path, parent: Path, version = None) -> None:
 
     v = version or _mk_ver()
 
-    p1c = copy(_rc(p1))
-    p1c.remove(ft.ID)
-    p2c = copy(_rc(p2))
-    p2c.add(ft.ID)
-    _add_new_mod(p1, 'children', p1c, v)
-    _add_new_mod(p2, 'children', p2c, v)
+    # change the old and new parents' children
+    _mv_child_of_parents(ft, p1, p2, v)
 
+    # perform the operation on disk
     newfp = parent/fp.name
     fp.rename(newfp)
+
+    # add a modification and save cairo
     _add_new_mod(ft, 'path', newfp, v)
     _save_tree(root)
+
+def _mv_child_of_parents(child, parent_src, parent_dest, version):
+    p1c = copy(_rc(parent_src))
+    p1c.remove(child.ID)
+    p2c = copy(_rc(parent_dest))
+    p2c.add(child.ID)
+    _add_new_mod(parent_src, 'children', p1c, version)
+    _add_new_mod(parent_dest, 'children', p2c, version)
 
 
 # helpers

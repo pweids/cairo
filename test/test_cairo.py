@@ -68,7 +68,7 @@ def test_recent_versions(cleandir):
     assert not v1
 
     v = c.Version(uuid1(), datetime.now())
-    mod = c.Mod(v, None, None)
+    mod = c.Mod(v, "data", "hi")
     ft.mods.append(mod)
 
     v2 = c.get_versions(root)
@@ -86,7 +86,7 @@ def test_resolve_version(cleandir):
 
     assert ft.data == 'test1'
     fdata = c.resolve(ft)
-    assert fdata['data'] == 'test2'
+    assert fdata.data == 'test2'
 
 
 def test_mv_file(cleandir):
@@ -102,10 +102,10 @@ def test_mv_file(cleandir):
     assert not f.exists()
     assert newfp.exists()
     ft = c.find_file(root, 'test.txt')
-    assert c.resolve(ft)['path'] == newfp
+    assert c.resolve(ft).path == newfp
 
     parent = c.find_file_path(root, p)
-    assert parent.children != c.resolve(parent)['children']
+    assert parent.children != c.resolve(parent).children
 
     assert c.find_file_path(root, newfp)
 
@@ -175,7 +175,7 @@ def test_remove_file(cleandir):
     print(ft.ID)
     c.rm_file(root, p)
 
-    assert ft.ID not in c.resolve(parent)['children']
+    assert ft.ID not in c.resolve(parent).children
     assert not p.exists()
 
 
