@@ -67,7 +67,7 @@ def ft_at_time(node: FileObject, dt: datetime) -> None:
     """
     if dt < _init_time: dt = _init_time
     cf = changed_files(node)
-    if node.curr_dt > dt and len(changed_files(node)) > 0:
+    if node.curr_dt >= dt and len(changed_files(node)) > 0:
         print(changed_files(node))
         raise CairoException("Commit your changes before time traveling")
 
@@ -198,6 +198,7 @@ def init(fp: Path = None) -> FileObject:
     except:
         ft = _create_file_tree(fp)
         _init_time = datetime.now()
+        _reset_init_times(ft)
         _save_tree(ft)
         return ft
 
@@ -224,10 +225,12 @@ def changed_files(root: FileObject) -> List[Tuple[Path, str]]:
 
     def is_modified(fp):
         if fp.is_dir(): return False # for Windows
+        ft = find_file_path(root, fp)
+        if not ft: return
         mtime = _mod_time(fp)
-        time = _last_changed(root, fp)
-        
-        return time is not None and mtime > time
+        time = _last_changed(ft)
+
+        return ft.data != _read_data(fp) and mtime > time
 
     files, ft_files = _make_sets(root)
     diff = ft_files - files
@@ -329,12 +332,17 @@ def _save_tree(root: FileObject) -> None:
         pickle.dump((root, _file_index, _init_time), tf)
 
 
-def _last_changed(root: FileObject, fp: Path) -> datetime:
-    f = find_file_path(root, fp)
-    if f:
-        return f.mods[-1].version.time if f.mods else f.init
-    else:
-        return None
+def _last_changed(node: FileObject) -> datetime:
+    return node.mods[-1].version.time if node.mods else node.init
+
+
+def _reset_init_times(root: FileObject) -> None:
+    """ Helper function to make sure init times
+    are all the same when creating a new gate
+    """
+    root.init = root.curr_dt = _init_time
+    for child in root.children:
+        _reset_init_times(_file_index[child])
 
 
 def _ignored_files(fp: Path) -> List[str]:
@@ -429,9 +437,10 @@ def _mod_time(fp: Path) -> datetime:
 
 
 def _make_sets(root: FileObject, dt: datetime = None) -> (Set[Path], Set[Path]):
+    dt = dt or root.curr_dt
     files = (set(_rfp(root, dt).glob('**/*')))
     files -= set(filter(lambda p: any(n in _ignored for n in str(p).split('/')), files))
-    ft_files = _tree_to_set(root, dt)
+    ft_files = _tree_to_set(root, dt=dt)
     ft_files.remove(_rfp(root, dt=dt))
     return files, ft_files
 

@@ -310,9 +310,11 @@ def test_add_file_change_in_time(cleandir):
 
     c.ft_at_time(root, before)
     assert not p.exists()
+    assert not c.changed_files(root)
 
     c.ft_at_time(root, after)
     assert p.exists()
+    assert not c.changed_files(root)
 
 
 def test_data_change_in_time(cleandir):
@@ -370,6 +372,14 @@ def test_date_before_init(cleandir):
 
     assert (Path()/'.cairo.pkl').exists()
 
+
+def test_date_before_with_new_file_throws_exception(cleandir):
+    root = c.init()
+    p = Path()/'new_file.txt'
+    p.touch()
+
+    past = datetime.now() - timedelta(days=1)
+    pytest.raises(c.CairoException, c.ft_at_time, root, past)
 
 def test_search_all(cleandir):
     root = c.init()
