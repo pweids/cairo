@@ -2,7 +2,7 @@
 This is the file handling the CLI version of Cairo
 """
 import click
-from . import mock_cairo as cairo
+from cairo import cairo
 from dateutil.parser import parse
 from datetime import datetime
 from time import sleep
@@ -62,21 +62,32 @@ def commit(ctx):
 
 
 @cli.command()
-@click.argument('date')
+@click.option('-d', '--date')
+@click.option('-v', '--version')
 @click.pass_context
-def gate(ctx, date):
-    """ visit your files at another time. type 'now' to return to the present """
+def gate(ctx, date, version):
+    """ visit your files at another time. type 'cairo' to return to the present """
     root = _ensure_init(ctx)
-    if date == "now":
+    if (date is None and version is None) or date == "now":
         click.secho(f'transporting you to the present', fg='bright_magenta')
         cairo.ft_at_time(root, datetime.now())
-    else:
+    elif date is not None:
         try:
             date = parse(date)
             click.secho(f'transporting you to {date.strftime("%I:%M:%S %p on %A, %B %d, %Y")}', fg='bright_magenta')
             cairo.ft_at_time(root, date)
         except ValueError:
             click.secho(f'i do not understand the time "{date}"', fg='bright_red')
+        finally: return
+
+    elif version is not None:
+        vs = cairo.get_versions(root)
+        ver = list(filter(lambda v: version == str(v.verid)[:6], vs))
+        if not ver:
+            click.secho(f'that version does not exist', fg='bright_red')
+        else:
+            click.secho(f'transporting you to {ver[0].time.strftime("%I:%M:%S %p on %A, %B %d, %Y")}', fg='bright_magenta')
+            cairo.ft_at_time(root, ver[0].time)
 
 
 @cli.command()
@@ -86,7 +97,7 @@ def hist(ctx):
     root = _ensure_init(ctx)
     vs = cairo.get_versions(root)
     for v in vs:
-        print(f"version {v.verid}\t{v.time.strftime('%I:%M:%S %p on %m-%d-%Y')}")
+        print(f"version {str(v.verid)[:6]}\t{v.time.strftime('%I:%M:%S %p on %m-%d-%Y')}")
 
 
 @cli.command()

@@ -13,7 +13,8 @@ from shutil import rmtree
 IGNORE_FILE = 'ignore.txt'
 PKL_FILE = '.cairo.pkl'
 _ignored = [IGNORE_FILE, PKL_FILE]
-_file_index = {}
+_file_index = {}  # store a directory of all files to access by ID and prevent copying data
+_init_time = None # cache the intialization time of the structure to avoid going too far back
 
 
 # Data Structures
@@ -64,10 +65,13 @@ def ft_at_time(node: FileObject, dt: datetime) -> None:
     """ Change the files on disk to reflect
     this FileObject's state at the specified time 
     """
-    if node.curr_dt >= dt and len(changed_files(node)) > 0:
+    if dt < _init_time: dt = _init_time
+    cf = changed_files(node)
+    if node.curr_dt > dt and len(changed_files(node)) > 0:
+        print(changed_files(node))
         raise CairoException("Commit your changes before time traveling")
 
-    if (node.init > dt and node.path.exists()):
+    if (not _is_root_dir(node.path) and node.init > dt and node.path.exists()):
         # node was created after dt
         _rm_f_or_d(node.path)
 
@@ -177,16 +181,23 @@ def init(fp: Path = None) -> FileObject:
     if isinstance(fp, str): fp = Path(fp)
     fp = fp or Path()
     tree_file = fp/PKL_FILE
-    global _ignored  # doing this to cache the files
-    _ignored = _ignored_files(fp/IGNORE_FILE)
+    
+    global _ignored
     global _file_index
+    global _init_time
+
+    _ignored = _ignored_files(fp/IGNORE_FILE)
     _file_index.clear()
 
     try:
         with open(tree_file, 'rb') as tf:
-            return pickle.load(tf)
+            root, idx, it = pickle.load(tf)
+            _file_index = idx
+            _init_time  = it
+            return root
     except:
         ft = _create_file_tree(fp)
+        _init_time = datetime.now()
         _save_tree(ft)
         return ft
 
@@ -315,7 +326,7 @@ def _add_file_to_tree(root, fp, version = None) -> FileObject:
 def _save_tree(root: FileObject) -> None:
     tree_file = _rfp(root)/PKL_FILE
     with open(tree_file, 'wb') as tf:
-        pickle.dump(root, tf)
+        pickle.dump((root, _file_index, _init_time), tf)
 
 
 def _last_changed(root: FileObject, fp: Path) -> datetime:
@@ -466,6 +477,10 @@ def _rm_f_or_d(fp):
         rmtree(fp)
     else:
         fp.unlink()
+
+
+def _is_root_dir(path: Path) -> bool:
+    return path.is_dir() and Path(PKL_FILE) in path.iterdir()
 
 
 def _is_subpath(path: Path, subpath: Path) -> bool:

@@ -140,6 +140,20 @@ def test_new_file(cleandir):
     assert (p, "new") in cf
 
 
+def test_new_file_version(cleandir):
+    root = c.init()
+
+    p = Path()/'test_dir'/'new_file2.txt'
+    p.touch()
+
+    root = c.init()
+    c.commit(root)
+
+    root = c.init()
+    v = c.get_versions(root)
+    assert v
+
+
 def test_new_dir(cleandir):
     assert not list(Path().glob('.cairo.pkl'))
     root = c.init()
@@ -288,6 +302,7 @@ def test_add_file_change_in_time(cleandir):
     p.touch()
 
     c.commit(root)
+    assert p.exists()
 
     vtime = c.get_versions(root)[-1].time
     before = vtime - timedelta(microseconds=10)
@@ -345,6 +360,15 @@ def test_move_and_data_change_in_time(cleandir):
     c.ft_at_time(root, after)
     data = dest.read_text()
     assert data == "change"
+
+
+def test_date_before_init(cleandir):
+    root = c.init()
+
+    time.sleep(0.2)
+    c.ft_at_time(root, datetime.now() - timedelta(days=1))
+
+    assert (Path()/'.cairo.pkl').exists()
 
 
 def test_search_all(cleandir):
