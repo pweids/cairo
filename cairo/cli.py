@@ -4,6 +4,7 @@ This is the file handling the CLI version of Cairo
 import click
 from . import mock_cairo as cairo
 from dateutil.parser import parse
+from time import sleep
 
 
 @click.group()
@@ -11,16 +12,24 @@ from dateutil.parser import parse
 @click.pass_context
 def cli(ctx, path):
     """ step through the gate """
-    ctx.ensure_object(dict)
-    ctx.obj['PATH'] = path
+    pass
 
 
 @cli.command()
 @click.pass_context
 def run(ctx):
-    """ keep the gates open, commiting once every second
+    """ keep the gates open, commiting if anything changes every minute
     """
-    _ensure_init(ctx)
+    root = _ensure_init(ctx)
+    click.clear()
+
+    while True:
+        sleep(60)
+        cf = cairo.changed_files(root)
+        if cf:
+            print ("committing these changes:")
+            _pretty_print_changes(cf)
+            cairo.commit(root)
 
 
 @cli.command()
@@ -28,7 +37,7 @@ def run(ctx):
 def status(ctx):
     """ peek through the gates, seeing what has changed
     """
-    _ensure_init(ctx)
+    root = _ensure_init(ctx)
 
 
 @cli.command()
@@ -44,8 +53,8 @@ def init(ctx):
 def commit(ctx):
     """ mark a point in time never to be changed
     """
-    _ensure_init(ctx)
-    cairo.commit(_get_root(ctx))
+    root = _ensure_init(ctx)
+    cairo.commit(root)
 
 
 @cli.command()
@@ -53,11 +62,11 @@ def commit(ctx):
 @click.pass_context
 def gate(ctx, date):
     """ visit your files at another time """
-    _ensure_init(ctx)
+    root = _ensure_init(ctx)
     try:
         date = parse(date)
         click.secho(f'transporting you to {date.strftime("%I:%M:%S %p on %A, %B %d, %Y")}', fg='bright_magenta')
-        cairo.ft_at_time(_get_root(ctx))
+        cairo.ft_at_time(root)
     except ValueError:
         click.secho(f'i do not understand the time "{date}"', fg='bright_red')
 
@@ -66,8 +75,12 @@ def gate(ctx, date):
 @click.pass_context
 def hist(ctx):
     """ display the full timeline """
-    _ensure_init(ctx)
+    root = _ensure_init(ctx)
     pass
+
+
+# helpers
+
 
 def _ensure_init(ctx):
     path = ctx.obj['PATH']
@@ -76,10 +89,21 @@ def _ensure_init(ctx):
         locstr = '' if loc == 'here' else f'-p {path} '
         click.secho(f"a gate has not yet been opened {loc}", fg="bright_red")
         raise click.ClickException(f"try calling 'cairo {locstr}init'")
+    return _get_root(ctx)
 
 def _get_root(ctx):
     path = ctx.obj['PATH']
     return cairo.init(path)
+
+def _pretty_print_changes(chng):
+    for p, t in chng:
+        if t == "rmv":
+            color = "red"
+        elif t == "new":
+            color = "green"
+        else:
+            color = "yellow"
+        click.secho(f"\t{t}\t{p}", fg=color)
 
 if __name__ == "__main__":
     cli(obj={})
