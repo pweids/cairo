@@ -254,6 +254,21 @@ def test_commit(cleandir):
     assert len(cf2) == 0
 
 
+def test_new_file_new_dir_commit(cleandir):
+    c.init()
+
+    d = Path()/'new_dir'
+    p = Path()/'new_dir'/'new_file.txt'
+    d.mkdir()
+    p.touch()
+
+    root = c.init()
+    c.commit(root)
+
+    root = c.init()
+    assert not c.changed_files(root)
+
+
 def test_uncomitted_changes_raise_exception(cleandir):
     root = c.init()
     
@@ -300,20 +315,21 @@ def test_add_file_change_in_time(cleandir):
     root = c.init()
     p = Path()/'new_file.txt'
     p.touch()
-
+    #root = c.init()
     c.commit(root)
     assert p.exists()
 
-    vtime = c.get_versions(root)[-1].time
-    before = vtime - timedelta(microseconds=10)
-    after = vtime + timedelta(microseconds=10)
-
+    before = datetime.now() - timedelta(days=1)
+    after = datetime.now() + timedelta(days=1)
+    #root = c.init()
     c.ft_at_time(root, before)
     assert not p.exists()
+    #root = c.init()
     assert not c.changed_files(root)
-
+    #root = c.init()
     c.ft_at_time(root, after)
     assert p.exists()
+    #root = c.init()
     assert not c.changed_files(root)
 
 
@@ -362,6 +378,44 @@ def test_move_and_data_change_in_time(cleandir):
     c.ft_at_time(root, after)
     data = dest.read_text()
     assert data == "change"
+
+
+def test_add_dir_and_file_change_in_time(cleandir):
+    c.init()
+    d = Path()/'new_dir'
+    d.mkdir()
+    p = d/'new_file.txt'
+    p.touch()
+
+    root = c.init()
+    c.commit(root)
+
+    root = c.init()
+    c.ft_at_time(root, datetime.now() - timedelta(days=1))
+
+    root = c.init()
+    assert not c.changed_files(root)
+
+    root = c.init()
+    c.ft_at_time(root, datetime.now())
+    assert d.exists() and p.exists()
+
+
+def test_commit_when_not_current(cleandir):
+    c.init()
+    d = Path() / 'new'
+    d.mkdir()
+    p = d / 'new_file.txt'
+    p.touch()
+
+    root = c.init()
+    c.commit(root)
+    vtime = c.get_versions(root)[-1].time
+    before = vtime - timedelta(microseconds=10)
+    root = c.init()
+    c.ft_at_time(root, before)
+
+    pytest.raises(c.CairoException, c.commit, root)
 
 
 def test_date_before_init(cleandir):

@@ -41,7 +41,10 @@ def status(ctx):
     """
     root = _ensure_init(ctx)
     cf = cairo.changed_files(root)
+    curr_t = cairo.current_time(root)
+    click.secho(f"the current time is {curr_t.strftime('%I:%M:%S %p on %m-%d-%Y')}")
     if cf: _pretty_print_changes(cf)
+    else: click.secho('no changes', fg='bright_magenta')
 
 
 @cli.command()
@@ -68,26 +71,28 @@ def commit(ctx):
 def gate(ctx, date, version):
     """ visit your files at another time. type 'cairo' to return to the present """
     root = _ensure_init(ctx)
-    if (date is None and version is None) or date == "now":
-        click.secho(f'transporting you to the present', fg='bright_magenta')
-        cairo.ft_at_time(root, datetime.now())
-    elif date is not None:
-        try:
-            date = parse(date)
-            click.secho(f'transporting you to {date.strftime("%I:%M:%S %p on %A, %B %d, %Y")}', fg='bright_magenta')
-            cairo.ft_at_time(root, date)
-        except ValueError:
-            click.secho(f'i do not understand the time "{date}"', fg='bright_red')
-        finally: return
+    try:
+        if (date is None and version is None) or date == "now":
+            cairo.ft_at_time(root, datetime.now())
+            click.secho(f'transporting you to the present', fg='bright_magenta')
 
-    elif version is not None:
-        vs = cairo.get_versions(root)
-        ver = list(filter(lambda v: version == str(v.verid)[:6], vs))
-        if not ver:
-            click.secho(f'that version does not exist', fg='bright_red')
-        else:
-            click.secho(f'transporting you to {ver[0].time.strftime("%I:%M:%S %p on %A, %B %d, %Y")}', fg='bright_magenta')
-            cairo.ft_at_time(root, ver[0].time)
+        elif date is not None:
+            date = parse(date)
+            cairo.ft_at_time(root, date)
+            click.secho(f'transporting you to {date.strftime("%I:%M:%S %p on %A, %B %d, %Y")}', fg='bright_magenta')
+
+        elif version is not None:
+            vs = cairo.get_versions(root)
+            ver = list(filter(lambda v: version == str(v.verid)[:6], vs))
+            if not ver:
+                click.secho(f'that version does not exist', fg='bright_red')
+            else:
+                click.secho(f'transporting you to {ver[0].time.strftime("%I:%M:%S %p on %A, %B %d, %Y")}', fg='bright_magenta')
+                cairo.ft_at_time(root, ver[0].time)
+    except ValueError:
+        click.secho(f'i do not understand the time "{date}"', fg='bright_red')
+    except cairo.CairoException:
+        click.secho('commit your changes before time traveling', fg="bright_red")
 
 
 @cli.command()
@@ -111,7 +116,6 @@ def find(ctx, query, file):
         cairo.search_file(root, file)
     else:
         cairo.search_all(root)
-    
 
 
 # helpers
@@ -126,9 +130,11 @@ def _ensure_init(ctx):
         raise click.ClickException(f"try calling 'cairo {locstr}init'")
     return _get_root(ctx)
 
+
 def _get_root(ctx):
     path = ctx.obj['PATH']
     return cairo.init(path)
+
 
 def _pretty_print_changes(chng):
     for p, t in chng:
@@ -137,8 +143,9 @@ def _pretty_print_changes(chng):
         elif t == "new":
             color = "green"
         else:
-            color = "yellow"
+            color = "bright_yellow"
         click.secho(f"\t{t}\t{p}", fg=color)
+
 
 if __name__ == "__main__":
     cli(obj={})

@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
+import os
 from uuid import uuid1, UUID
 import pickle
 from copy import copy
@@ -42,12 +43,15 @@ class FileObject:
     ID:       UUID
     mods:     List[Mod] = field(default_factory=list) # diff versions of this file
     init:     datetime = field(init=False)  # when this file was initialized
+    is_dir:   bool = field(init=False)
     children: List[UUID] = field(default_factory=set, init=False)
     curr_dt:  datetime = field(init=False) # current datetime when time traveling
 
     def __post_init__(self):
         self.init = self.curr_dt = max(datetime.now(), _mod_time(self.path))
         # a little hack because the OS makes modified time later than creation
+        self.is_dir = self.path.is_dir()
+
 
     def __str__(self):
         return f"FileObject(path='{self.path}', " \
@@ -66,9 +70,7 @@ def ft_at_time(node: FileObject, dt: datetime) -> None:
     this FileObject's state at the specified time 
     """
     if dt < _init_time: dt = _init_time
-    cf = changed_files(node)
     if node.curr_dt >= dt and len(changed_files(node)) > 0:
-        print(changed_files(node))
         raise CairoException("Commit your changes before time traveling")
 
     if (not _is_root_dir(node.path) and node.init > dt and node.path.exists()):
@@ -94,6 +96,9 @@ def ft_at_time(node: FileObject, dt: datetime) -> None:
 
     for c in _rc(node):
         ft_at_time(_file_index[c], dt)
+
+    if _is_root_dir(node.path):
+        _save_tree(node)
 
 
 def search_all(root: FileObject, query: str) \
@@ -170,6 +175,15 @@ def resolve(ft: FileObject, stop_time: datetime = None) -> FileObject:
         if not stop_time or m.version.time <= stop_time:
             setattr(rft, m.field, m.value)
     return rft
+
+
+def current_time(ft: FileObject, latest_time = None) -> datetime:
+    latest_time = latest_time or ft.curr_dt
+    if ft.curr_dt > latest_time:
+        latest_time = ft.curr_dt
+    for c in _rc(ft):
+        latest_time = current_time(_file_index[c], latest_time)
+    return latest_time
 
 
 # Setup
@@ -249,8 +263,11 @@ def changed_files(root: FileObject) -> List[Tuple[Path, str]]:
 def commit(root: FileObject) -> None:
     """ Commit all data modifcations in the local directory to the data structure.
     Does not affect the local directory.  """
+    if root.curr_dt < _last_changed(root):
+        raise CairoException("not at most recent time")
     v = _mk_ver()
-    for fp, chng in changed_files(root):
+    cf = changed_files(root)
+    for fp, chng in sorted(cf, key=lambda fc: str(fc[0]).count(os.path.sep)):
         if chng == 'rmv': 
             rm_file(root, fp, v)
             continue
@@ -395,8 +412,13 @@ def _add_children(child_paths: Set[UUID], dt: datetime = None):
     for c in child_paths:
         child = _file_index.get(c)
         if child:
-            (child.path).touch()
-            child.path.write_text(_rd(child, dt))
+            p = child.path
+            if child.is_dir:
+                p.mkdir()
+                _add_children(child.children, dt)
+            else:
+                p.touch()
+                _write_data(p, _rd(child, dt))
 
 
 def _rmv_children(child_paths: Set[UUID]):
@@ -466,6 +488,7 @@ def _query_in_data(ft: FileObject, query: str) \
 
 
 def _read_data(fp: Path):
+    data = ""
     try:
         data = fp.read_text()
     except UnicodeDecodeError:
@@ -475,6 +498,7 @@ def _read_data(fp: Path):
 
 
 def _write_data(fp: Path, data):
+    data = data or ''
     if isinstance(data, str):
         fp.write_text(data)
     else:
