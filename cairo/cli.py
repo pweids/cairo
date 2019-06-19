@@ -4,6 +4,7 @@ This is the file handling the CLI version of Cairo
 import click
 from . import mock_cairo as cairo
 from dateutil.parser import parse
+from datetime import datetime
 from time import sleep
 
 
@@ -12,7 +13,8 @@ from time import sleep
 @click.pass_context
 def cli(ctx, path):
     """ step through the gate """
-    pass
+    ctx.ensure_object(dict)
+    ctx.obj['PATH'] = path
 
 
 @cli.command()
@@ -38,6 +40,8 @@ def status(ctx):
     """ peek through the gates, seeing what has changed
     """
     root = _ensure_init(ctx)
+    cf = cairo.changed_files(root)
+    if cf: _pretty_print_changes(cf)
 
 
 @cli.command()
@@ -61,14 +65,18 @@ def commit(ctx):
 @click.argument('date')
 @click.pass_context
 def gate(ctx, date):
-    """ visit your files at another time """
+    """ visit your files at another time. type 'now' to return to the present """
     root = _ensure_init(ctx)
-    try:
-        date = parse(date)
-        click.secho(f'transporting you to {date.strftime("%I:%M:%S %p on %A, %B %d, %Y")}', fg='bright_magenta')
-        cairo.ft_at_time(root)
-    except ValueError:
-        click.secho(f'i do not understand the time "{date}"', fg='bright_red')
+    if date == "now":
+        click.secho(f'transporting you to the present', fg='bright_magenta')
+        cairo.ft_at_time(root, datetime.now())
+    else:
+        try:
+            date = parse(date)
+            click.secho(f'transporting you to {date.strftime("%I:%M:%S %p on %A, %B %d, %Y")}', fg='bright_magenta')
+            cairo.ft_at_time(root, date)
+        except ValueError:
+            click.secho(f'i do not understand the time "{date}"', fg='bright_red')
 
 
 @cli.command()
@@ -76,7 +84,23 @@ def gate(ctx, date):
 def hist(ctx):
     """ display the full timeline """
     root = _ensure_init(ctx)
-    pass
+    vs = cairo.get_versions(root)
+    for v in vs:
+        print(f"version {v.verid}\t{v.time.strftime('%I:%M:%S %p on %m-%d-%Y')}")
+
+
+@cli.command()
+@click.argument('query')
+@click.option('-f', '--file', default=None, type=str)
+@click.pass_context
+def find(ctx, query, file):
+    """ find all versions where your query is present """
+    root = _ensure_init(ctx)
+    if file:
+        cairo.search_file(root, file)
+    else:
+        cairo.search_all(root)
+    
 
 
 # helpers

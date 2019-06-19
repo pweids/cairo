@@ -57,6 +57,7 @@ class CairoException(BaseException):
     """ Cairo specific exceptions """
     pass
 
+
 # Query
 
 def ft_at_time(node: FileObject, dt: datetime) -> None:
@@ -107,12 +108,13 @@ def search_all(root: FileObject, query: str) \
 
 def search_file(root: FileObject, fp: Path, query: str) \
         -> Set[Tuple[Path, Optional[Version]]]:
+    if isinstance(fp, str): fp = Path(fp)
     all_vs = search_all(root, query)
     return set(filter(lambda v: v[0] == fp, all_vs))
 
 
 def get_versions(root: FileObject) -> List[Version]:
-    """ Returns all of the versions in the FileObject """
+    """ Returns all of the versions recursively in the FileObject """
     def go(ft, vs):
         vs = vs.union(set([m.version for m in ft.mods]))
         for c in _rc(ft):
@@ -365,6 +367,7 @@ def _rd(ft: FileObject, dt: datetime = None):
     """
     return resolve(ft, dt).data
 
+
 def _rfp(ft: FileObject, dt: datetime = None) -> Path:
     return resolve(ft, dt).path
 
@@ -406,7 +409,7 @@ def _mk_ver() -> Version:
     return Version(uuid1(), datetime.now())
 
 
-def _fp_in_tree(root: FileObject, fp: Path) -> bool:
+def _is_fp_in_tree(root: FileObject, fp: Path) -> bool:
     return find_file_path(root, fp) is not None
 
 
@@ -456,6 +459,7 @@ def _write_data(fp: Path, data):
         fp.write_text(data)
     else:
         fp.write_bytes(data)
+
 
 def _rm_f_or_d(fp):
     if fp.is_dir(): 
