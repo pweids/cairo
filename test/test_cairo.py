@@ -311,6 +311,30 @@ def test_remove_change_in_time(cleandir):
     assert not p.exists()
 
 
+def test_remove2_change_in_time(cleandir):
+    c.init()
+    p = Path()/'test_dir'/'test.txt'
+    p.unlink()
+
+    root = c.init()
+    c.commit(root)
+
+    vtime = c.get_versions(root)[-1].time
+    before = vtime - timedelta(microseconds=1)
+    after = vtime + timedelta(microseconds=10)
+
+    root = c.init()
+    c.ft_at_time(root, before)
+    root = c.init()
+    assert not c.changed_files(root)
+    assert p.exists()
+
+    root = c.init()
+    c.ft_at_time(root, after)
+    assert not p.exists()
+
+
+
 def test_add_file_change_in_time(cleandir):
     root = c.init()
     p = Path()/'new_file.txt'
@@ -401,6 +425,36 @@ def test_add_dir_and_file_change_in_time(cleandir):
     assert d.exists() and p.exists()
 
 
+def test_change_file_back_in_time(cleandir):
+    c.init()
+    p = Path() / 'test_new.txt'
+    p.touch()
+
+    r = c.init()
+    c.commit(r)
+
+    r = c.init()
+    v = c.get_versions(r)[0]
+
+    p.write_text('change1')
+    r = c.init()
+    c.commit(r)
+
+    r = c.init()
+    vs = c.get_versions(r)
+    vtime = vs[0].time
+    before = v.time #- timedelta(microseconds=1)
+    after = v.time + timedelta(microseconds=10)
+
+    r = c.init()
+    c.ft_at_time(r, before)
+    assert not p.read_text()
+
+    p.write_text('change2')
+
+    r = c.init()
+    assert not c.changed_files(r)
+
 def test_commit_when_not_current(cleandir):
     c.init()
     d = Path() / 'new'
@@ -412,9 +466,15 @@ def test_commit_when_not_current(cleandir):
     c.commit(root)
     vtime = c.get_versions(root)[-1].time
     before = vtime - timedelta(microseconds=10)
+
     root = c.init()
     c.ft_at_time(root, before)
 
+    (Path()/'test3.txt').write_text('changed')
+    root = c.init()
+    assert not c.changed_files(root)
+
+    root = c.init()
     pytest.raises(c.CairoException, c.commit, root)
 
 

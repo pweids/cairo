@@ -61,7 +61,10 @@ def commit(ctx):
     """ mark a point in time never to be changed
     """
     root = _ensure_init(ctx)
-    cairo.commit(root)
+    try:
+        cairo.commit(root)
+    except cairo.CairoException:
+        click.secho("you cannot make a commit if you're not in the present", fg="red")
 
 
 @cli.command()
@@ -113,10 +116,13 @@ def find(ctx, query, file):
     """ find all versions where your query is present """
     root = _ensure_init(ctx)
     if file:
-        cairo.search_file(root, file)
+        vs = cairo.search_file(root, file, query)
     else:
-        cairo.search_all(root)
-
+        vs = cairo.search_all(root, query)
+    for v in vs:
+        print(f"{v[0]}", end="")
+        if v[1]: print(f"\tversion {str(v[1].verid)[:6]}\t{v[1].time.strftime('%I:%M:%S %p on %m-%d-%Y')}")
+        else: print("\tinit")
 
 # helpers
 

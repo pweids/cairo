@@ -1,4 +1,4 @@
-from typing import List, Dict, Set, Tuple, Optional
+from typing import List, Set, Tuple, Optional
 from dataclasses import dataclass, field
 from collections import namedtuple
 from datetime import datetime
@@ -14,8 +14,8 @@ from shutil import rmtree
 IGNORE_FILE = 'ignore.txt'
 PKL_FILE = '.cairo.pkl'
 _ignored = [IGNORE_FILE, PKL_FILE]
-_file_index = {}  # store a directory of all files to access by ID and prevent copying data
-_init_time = None # cache the intialization time of the structure to avoid going too far back
+_file_index = {}   # store a directory of all files to access by ID and prevent copying data
+_init_time: datetime = None  # cache the intialization time of the structure to avoid going too far back
 
 
 # Data Structures
@@ -41,17 +41,16 @@ class FileObject:
     path:     Path           # this file's name. Not using paths here
     data:     str            # the textual data in this file if Text file
     ID:       UUID
-    mods:     List[Mod] = field(default_factory=list) # diff versions of this file
+    mods:     List[Mod] = field(default_factory=list)  # diff versions of this file
     init:     datetime = field(init=False)  # when this file was initialized
     is_dir:   bool = field(init=False)
-    children: List[UUID] = field(default_factory=set, init=False)
-    curr_dt:  datetime = field(init=False) # current datetime when time traveling
+    children: Set[UUID] = field(default_factory=set, init=False)
+    curr_dt:  datetime = field(init=False)  # current datetime when time traveling
 
     def __post_init__(self):
         self.init = self.curr_dt = max(datetime.now(), _mod_time(self.path))
         # a little hack because the OS makes modified time later than creation
         self.is_dir = self.path.is_dir()
-
 
     def __str__(self):
         return f"FileObject(path='{self.path}', " \
@@ -70,22 +69,22 @@ def ft_at_time(node: FileObject, dt: datetime) -> None:
     this FileObject's state at the specified time 
     """
     if dt < _init_time: dt = _init_time
-    if node.curr_dt >= dt and len(changed_files(node)) > 0:
+    if _is_root_dir(node.path) and changed_files(node):
         raise CairoException("Commit your changes before time traveling")
 
-    if (not _is_root_dir(node.path) and node.init > dt and node.path.exists()):
+    if not _is_root_dir(node.path) and node.init > dt and node.path.exists():
         # node was created after dt
         _rm_f_or_d(node.path)
 
-    if (_rfp(node, node.curr_dt) != _rfp(node, dt)):
+    if _rfp(node, node.curr_dt) != _rfp(node, dt):
         # file has moved
         _rfp(node, node.curr_dt).rename(_rfp(node, dt))
 
-    if (_rd(node, node.curr_dt) != _rd(node, dt)):
+    if _rd(node, node.curr_dt) != _rd(node, dt):
         # data has changed
         _rfp(node, dt).write_text(_rd(node, dt))
 
-    if (_rc(node, node.curr_dt) != _rc(node, dt)):
+    if _rc(node, node.curr_dt) != _rc(node, dt):
         # node has been removed
         curr_chld = _rc(node, node.curr_dt)
         dt_chld = _rc(node, dt)
@@ -206,10 +205,10 @@ def init(fp: Path = None) -> FileObject:
     try:
         with open(tree_file, 'rb') as tf:
             root, idx, it = pickle.load(tf)
-            _file_index = idx
-            _init_time  = it
-            return root
-    except:
+        _file_index = idx
+        _init_time = it
+        return root
+    except FileNotFoundError:
         ft = _create_file_tree(fp)
         _init_time = datetime.now()
         _reset_init_times(ft)
@@ -231,6 +230,8 @@ def changed_files(root: FileObject) -> List[Tuple[Path, str]]:
     """ List all files changed since the most recent version.
     Has no side effects. """
     changed = []
+    if not is_time_current(root):
+        return changed
 
     def is_new(fp):
         if fp.name in _ignored: return False
@@ -241,10 +242,8 @@ def changed_files(root: FileObject) -> List[Tuple[Path, str]]:
         if fp.is_dir(): return False # for Windows
         ft = find_file_path(root, fp)
         if not ft: return
-        mtime = _mod_time(fp)
-        time = _last_changed(ft)
 
-        return ft.data != _read_data(fp) and mtime > time
+        return _rd(ft, ft.curr_dt) != _read_data(fp)
 
     files, ft_files = _make_sets(root)
     diff = ft_files - files
@@ -261,9 +260,9 @@ def changed_files(root: FileObject) -> List[Tuple[Path, str]]:
 
 
 def commit(root: FileObject) -> None:
-    """ Commit all data modifcations in the local directory to the data structure.
+    """ Commit all data modifications in the local directory to the data structure.
     Does not affect the local directory.  """
-    if root.curr_dt < _last_changed(root):
+    if not is_time_current(root):
         raise CairoException("not at most recent time")
     v = _mk_ver()
     cf = changed_files(root)
@@ -275,7 +274,7 @@ def commit(root: FileObject) -> None:
         data = _read_data(fp)
         if not ft:
             ft = _add_file_to_tree(root, fp, v)
-            ft.init = v.time # because creation time is delayed by OS
+            ft.init = v.time  # because creation time is delayed by OS
         else:
             _add_new_mod(ft, 'data', data, v)
     _save_tree(root)
@@ -353,6 +352,15 @@ def _last_changed(node: FileObject) -> datetime:
     return node.mods[-1].version.time if node.mods else node.init
 
 
+def is_time_current(node: FileObject) -> bool:
+    if node.curr_dt < _last_changed(node):
+        return False
+    elif not node.children:
+        return True
+    else:
+        return all(is_time_current(_file_index[n]) for n in _rc(node, node.curr_dt))
+
+
 def _reset_init_times(root: FileObject) -> None:
     """ Helper function to make sure init times
     are all the same when creating a new gate
@@ -382,16 +390,13 @@ def _create_file_tree(fp: Path) -> Optional[FileObject]:
             if child:
                 ft.children.add(child.ID)
     else:
-        try:
-            d = _read_data(fp)
-            ft = FileObject(fp, d, uuid1())
-            _file_index[ft.ID] = ft
-        except:
-            return None
+        d = _read_data(fp)
+        ft = FileObject(fp, d, uuid1())
+        _file_index[ft.ID] = ft
     return ft
 
 
-def _rc(ft: FileObject, dt: datetime = None) -> List[UUID]:
+def _rc(ft: FileObject, dt: datetime = None) -> Set[UUID]:
     """ Return the children of this FileObject after being fully resolved.
     We have to do this to keep the tree accurate after moves, removes, additions """
     return resolve(ft, dt).children
@@ -459,7 +464,7 @@ def _mod_time(fp: Path) -> datetime:
 
 
 def _make_sets(root: FileObject, dt: datetime = None) -> (Set[Path], Set[Path]):
-    dt = dt or root.curr_dt
+    dt = dt or current_time(root, root.curr_dt)
     files = (set(_rfp(root, dt).glob('**/*')))
     files -= set(filter(lambda p: any(n in _ignored for n in str(p).split('/')), files))
     ft_files = _tree_to_set(root, dt=dt)
