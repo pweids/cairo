@@ -555,6 +555,31 @@ def test_search_removed_file(cleandir):
     assert c.search_all(root, 'test1')
 
 
+def test_reset(cleandir):
+    c.init()
+    p = Path()/'newfile.txt'
+    p.touch()
+    root = c.init()
+    c.commit(root)
+
+    p.unlink()
+    root = c.init()
+    c.reset(root)
+
+    root = c.init()
+    assert not c.changed_files(root)
+    assert p.exists()
+
+
+def test_diff(cleandir):
+    c.init()
+    p = Path() /'test_dir' / 'test.txt'
+    p.write_text('illuminati speaks')
+
+    root = c.init()
+    assert (p, 'test1', 'illuminati speaks') in c.diff(root)
+
+
 def test_img_file(cleandir):
     root = c.init()
     create_test_image((155,0,0))

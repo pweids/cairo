@@ -68,6 +68,27 @@ def commit(ctx):
 
 
 @cli.command()
+@click.pass_context
+def reset(ctx):
+    """ discard any changes, returning to the current time """
+    root = _ensure_init(ctx)
+    cairo.reset(root)
+
+
+@cli.command()
+@click.pass_context
+def diff(ctx):
+    """ see the modifications """
+    root = _ensure_init(ctx)
+    for f, b, a in cairo.diff(root):
+        click.secho(f'{f}', fg='yellow')
+        click.secho('before', fg='green')
+        click.echo(b)
+        click.secho('after', fg='red')
+        click.echo(a)
+
+
+@cli.command()
 @click.option('-d', '--date')
 @click.option('-v', '--version')
 @click.pass_context

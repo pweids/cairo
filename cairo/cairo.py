@@ -66,7 +66,8 @@ class CairoException(BaseException):
 
 def ft_at_time(node: FileObject, dt: datetime) -> None:
     """ Change the files on disk to reflect
-    this FileObject's state at the specified time 
+    this FileObject's state at the specified time. Set reset to
+    true to ignore any uncommited changes.
     """
     if dt < _init_time: dt = _init_time
     if _is_root_dir(node.path) and changed_files(node):
@@ -98,6 +99,29 @@ def ft_at_time(node: FileObject, dt: datetime) -> None:
 
     if _is_root_dir(node.path):
         _save_tree(node)
+
+
+def reset(node: FileObject) -> None:
+    if not _is_root_dir(node.path):
+        return
+    cf = changed_files(node)
+    if not cf:
+        return
+
+    for fp, chng in cf:
+        ft = find_file_path(node, fp)
+        if chng == 'rmv':
+            if ft.is_dir:
+                fp.mkdir()
+            else:
+                fp.touch()
+                _write_data(fp, _rd(ft, ft.curr_dt))
+
+        elif chng == 'mod':
+            _write_data(fp, _rd(ft, ft.curr_dt))
+
+        elif chng == 'new':
+            _rm_f_or_d(fp)
 
 
 def search_all(root: FileObject, query: str) \
@@ -257,6 +281,18 @@ def changed_files(root: FileObject) -> List[Tuple[Path, str]]:
         changed.append((f, "rmv"))
     
     return changed
+
+
+def diff(root: FileObject) -> List[Tuple[Path, str, str]]:
+    """ Return the before/after of a filepath modification """
+    if not _is_root_dir(root.path): return
+    diffs = []
+    for fp, chng in changed_files(root):
+        ft = find_file_path(root, fp)
+        if chng == "mod":
+            diffs.append((fp, _rd(ft, ft.curr_dt), _read_data(fp)))
+    return diffs
+
 
 
 def commit(root: FileObject) -> None:
