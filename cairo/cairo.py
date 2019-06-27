@@ -15,7 +15,7 @@ IGNORE_FILE = 'ignore.txt'
 PKL_FILE = '.cairo.pkl'
 _ignored = [IGNORE_FILE, PKL_FILE]
 _file_index = {}   # store a directory of all files to access by ID and prevent copying data
-_init_time: datetime = None  # cache the intialization time of the structure to avoid going too far back
+_init_time: Optional[datetime] = None  # cache the initialization time of the structure to avoid going too far back
 
 
 # Data Structures
@@ -39,7 +39,7 @@ class Mod:
 @dataclass
 class FileObject:
     path:     Path           # this file's name. Not using paths here
-    data:     str            # the textual data in this file if Text file
+    data:     Optional[str]  # the textual data in this file if Text file
     ID:       UUID
     mods:     List[Mod] = field(default_factory=list)  # diff versions of this file
     init:     datetime = field(init=False)  # when this file was initialized
@@ -67,7 +67,7 @@ class CairoException(BaseException):
 def ft_at_time(node: FileObject, dt: datetime) -> None:
     """ Change the files on disk to reflect
     this FileObject's state at the specified time. Set reset to
-    true to ignore any uncommited changes.
+    true to ignore any uncommitted changes.
     """
     if dt < _init_time: dt = _init_time
     if _is_root_dir(node.path) and changed_files(node):
@@ -152,8 +152,8 @@ def get_versions(root: FileObject) -> List[Version]:
         for c in _rc(ft):
             vs = go(_file_index[c], vs)
         return vs
-    vs = go(root, set())
-    return sorted(vs, key=lambda v: v.time, reverse=True)
+    vers = go(root, set())
+    return sorted(vers, key=lambda v: v.time, reverse=True)
 
 
 def find_file(ft: FileObject, name: str) -> Optional[FileObject]:
@@ -201,7 +201,7 @@ def resolve(ft: FileObject, stop_time: datetime = None) -> FileObject:
     return rft
 
 
-def current_time(ft: FileObject, latest_time = None) -> datetime:
+def current_time(ft: FileObject, latest_time=None) -> datetime:
     latest_time = latest_time or ft.curr_dt
     if ft.curr_dt > latest_time:
         latest_time = ft.curr_dt
@@ -264,27 +264,27 @@ def changed_files(root: FileObject) -> List[Tuple[Path, str]]:
         return not ft
 
     def is_modified(fp):
-        if fp.is_dir(): return False # for Windows
+        if fp.is_dir(): return False  # for Windows
         ft = find_file_path(root, fp)
         if not ft: return
 
         return _rd(ft, ft.curr_dt) != _read_data(fp)
 
     files, ft_files = _make_sets(root)
-    diff = ft_files - files
+    diffs = ft_files - files
     for f in files:
         if is_new(f):
             changed.append((f, "new"))
         elif is_modified(f):
             changed.append((f, "mod"))
     
-    for f in diff:
+    for f in diffs:
         changed.append((f, "rmv"))
     
     return changed
 
 
-def diff(root: FileObject) -> List[Tuple[Path, str, str]]:
+def diff(root: FileObject) -> Optional[List[Tuple[Path, str, str]]]:
     """ Return the before/after of a filepath modification """
     if not _is_root_dir(root.path): return
     diffs = []
@@ -293,7 +293,6 @@ def diff(root: FileObject) -> List[Tuple[Path, str, str]]:
         if chng == "mod":
             diffs.append((fp, _rd(ft, ft.curr_dt), _read_data(fp)))
     return diffs
-
 
 
 def commit(root: FileObject) -> None:
@@ -319,7 +318,7 @@ def commit(root: FileObject) -> None:
 
 # Commands
 
-def rm_file(root: FileObject, fp: Path, version = None) -> None:
+def rm_file(root: FileObject, fp: Path, version=None) -> None:
     """ Remove the file from the FileObject and from disk. """
     ft = find_file_path(root, fp)
     if not ft: return
@@ -332,7 +331,7 @@ def rm_file(root: FileObject, fp: Path, version = None) -> None:
     _save_tree(root)
 
 
-def mv_file(root: FileObject, fp: Path, parent: Path, version = None) -> None:
+def mv_file(root: FileObject, fp: Path, parent: Path, version=None) -> None:
     """ Move "file" to "parent" directory in FileObject and disk. This
     is preferable to moving the file on its own or cairo will think one
     file was deleted while another created. """
@@ -468,7 +467,7 @@ def _rmv_children(child_paths: Set[UUID]):
         child = _file_index.get(c)
         if child: 
             try: child.path.unlink()
-            except: continue
+            except IsADirectoryError: continue
 
 
 def _find_file(root: FileObject, ID: UUID) -> Optional[FileObject]:
@@ -509,7 +508,7 @@ def _make_sets(root: FileObject, dt: datetime = None) -> (Set[Path], Set[Path]):
     return files, ft_files
 
 
-def _tree_to_set(node: FileObject, s = None, dt: datetime = None) -> Set[Path]:
+def _tree_to_set(node: FileObject, s=None, dt: datetime = None) -> Set[Path]:
     s = s or set()
     s.add(_rfp(node, dt))
     for c in _rc(node, dt):

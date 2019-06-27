@@ -517,6 +517,7 @@ def test_date_before_with_new_file_throws_exception(cleandir):
     past = datetime.now() - timedelta(days=1)
     pytest.raises(c.CairoException, c.ft_at_time, root, past)
 
+
 def test_search_all(cleandir):
     root = c.init()
     assert c.search_all(root, "test1")
