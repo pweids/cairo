@@ -174,7 +174,8 @@ def find_file_path(ft: FileObject, fp: Path) -> Optional[FileObject]:
     if _rfp(ft) == fp:
         return ft
     else:
-        for c in _rc(ft):
+        children = _rc(ft)
+        for c in children:
             f = find_file_path(_file_index[c], fp)
             if f:
                 return f
@@ -311,7 +312,7 @@ def commit(root: FileObject) -> None:
         if not ft:
             ft = _add_file_to_tree(root, fp, v)
             ft.init = v.time  # because creation time is delayed by OS
-        else:
+        elif data != _rd(ft):
             _add_new_mod(ft, 'data', data, v)
     _save_tree(root)
 
@@ -372,7 +373,7 @@ def _add_file_to_tree(root, fp, version = None) -> FileObject:
     version = version or _mk_ver()
     parent = find_file_path(root, fp.parent)
     newft = _create_file_tree(fp)
-    pc = copy(parent.children)
+    pc = copy(_rc(parent))
     pc.add(newft.ID)
     _add_new_mod(parent, 'children', pc, version)
     return newft

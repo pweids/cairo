@@ -269,6 +269,28 @@ def test_new_file_new_dir_commit(cleandir):
     assert not c.changed_files(root)
 
 
+def test_new_dir_and_files():
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        os.chdir(td)
+        c.init()
+
+        a = cwd/'a'
+        n1 = cwd/'a'/'n1.txt'
+        n2 = cwd/'n2.txt'
+
+        a.mkdir()
+        n1.touch()
+        n2.touch()
+
+        root = c.init()
+        c.commit(root)
+
+        root = c.init()
+        assert not c.changed_files(root)
+
+
+
 def test_uncomitted_changes_raise_exception(cleandir):
     root = c.init()
     
